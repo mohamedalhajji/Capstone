@@ -10,33 +10,35 @@ import { Card, CommandButton, IconMetric, ScreenState, SectionHeader, StatusBadg
 import { colors, spacing } from '../ui/theme';
 
 function getEmergencyStatus(events: EventItem[] = []) {
-    const latestActive = events.find((event) =>
-        ['critical', 'high', 'warning'].includes(event.severity)
-    );
+    const criticalEvent = events.find((event) => event.severity === 'critical');
 
-    if (!latestActive) {
-        return {
-            label: 'Normal',
-            icon: 'shield-check-outline' as const,
-            color: colors.success,
-            message: 'No recent alerts. The system is monitoring normally.',
-        };
-    }
-
-    if (latestActive.severity === 'critical') {
+    if (criticalEvent) {
         return {
             label: 'Critical Alert',
             icon: 'fire-alert' as const,
             color: colors.critical,
-            message: latestActive.message,
+            message: criticalEvent.message,
+        };
+    }
+
+    const warningEvent = events.find((event) =>
+        ['high', 'warning'].includes(event.severity)
+    );
+
+    if (warningEvent) {
+        return {
+            label: 'Security Alert',
+            icon: 'shield-alert-outline' as const,
+            color: colors.warning,
+            message: warningEvent.message,
         };
     }
 
     return {
-        label: 'Security Alert',
-        icon: 'shield-alert-outline' as const,
-        color: colors.warning,
-        message: latestActive.message,
+        label: 'Normal',
+        icon: 'shield-check-outline' as const,
+        color: colors.success,
+        message: 'No recent alerts. The system is monitoring normally.',
     };
 }
 
@@ -75,7 +77,7 @@ export default function DashboardScreen() {
     }
 
     const recentEvents = events?.slice(0, 3) ?? [];
-    const emergencyStatus = getEmergencyStatus(recentEvents);
+    const emergencyStatus = getEmergencyStatus(events?.slice(0, 10) ?? []);
     const connected = !!health?.ok && !healthError;
     const resetting = resettingSystem || fullResetting;
 

@@ -165,6 +165,16 @@ async function processNfcAccess({ authorized, nfc_uid, user_name }) {
 
   const systemState = await getSystemState();
   const previousMode = systemState.current_mode;
+  const nfcStatusValue = authorized ? "authorized_access" : "unauthorized_access";
+
+  await pool.query(
+    `UPDATE sensors
+     SET status = 'triggered',
+         last_value = $1,
+         updated_at = CURRENT_TIMESTAMP
+     WHERE sensor_name = 'nfc_main_door'`,
+    [nfcStatusValue]
+  );
 
   if (authorized) {
     let newMode = previousMode;

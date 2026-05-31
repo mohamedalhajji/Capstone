@@ -44,9 +44,17 @@ export default function MainTabs() {
                 tabBarStyle: {
                     backgroundColor: colors.surface,
                     borderTopColor: colors.border,
-                    height: 64,
+                    height: 86,
                     paddingTop: 8,
-                    paddingBottom: 10,
+                    paddingBottom: 22,
+                },
+                tabBarItemStyle: {
+                    height: 56,
+                    marginBottom: 8,
+                    justifyContent: 'center',
+                },
+                tabBarIconStyle: {
+                    marginTop: 0,
                 },
                 tabBarIcon: ({ color, size }) => (
                     <MaterialCommunityIcons
@@ -57,6 +65,13 @@ export default function MainTabs() {
                 ),
                 tabBarActiveTintColor: colors.primary,
                 tabBarInactiveTintColor: colors.subtle,
+                animation: 'fade',
+                transitionSpec: {
+                    animation: 'timing',
+                    config: {
+                        duration: 180,
+                    },
+                },
                 sceneStyle: {
                     backgroundColor: colors.background,
                 },
