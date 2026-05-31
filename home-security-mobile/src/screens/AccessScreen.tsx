@@ -4,6 +4,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useAccessLogs } from '../hooks/useAccessLogs';
 import { AccessLogItem } from '../types/accessLog';
 import { Card, ScreenState, StatusBadge } from '../ui/components';
+import { FadeInView } from '../ui/FadeInView';
 import { colors, spacing } from '../ui/theme';
 
 const resultColors: Record<AccessLogItem['result'], string> = {
@@ -56,6 +57,7 @@ export default function AccessScreen() {
     }
 
     return (
+        <FadeInView>
         <ScrollView contentContainerStyle={{ padding: spacing.page, gap: spacing.gap, backgroundColor: colors.background }}>
             <Card>
                 <Text style={{ color: colors.text, fontSize: 20, fontWeight: '900' }}>NFC Attempts</Text>
@@ -72,5 +74,6 @@ export default function AccessScreen() {
                 </Text>
             )}
         </ScrollView>
+        </FadeInView>
     );
 }

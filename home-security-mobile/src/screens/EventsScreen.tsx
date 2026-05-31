@@ -4,6 +4,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useEvents } from '../hooks/useEvents';
 import { EventItem } from '../types/event';
 import { Card, ScreenState, StatusBadge } from '../ui/components';
+import { FadeInView } from '../ui/FadeInView';
 import { colors, spacing } from '../ui/theme';
 
 const severityColors: Record<EventItem['severity'], string> = {
@@ -75,6 +76,7 @@ export default function EventsScreen() {
     }
 
     return (
+        <FadeInView>
         <ScrollView contentContainerStyle={{ padding: spacing.page, gap: spacing.gap, backgroundColor: colors.background }}>
             {events?.length ? (
                 events.map((event) => <EventRow key={event.id} event={event} />)
@@ -82,5 +84,6 @@ export default function EventsScreen() {
                 <ScreenState title="No events yet" message="Trigger a simulation or ESP32 sensor event to populate this list." />
             )}
         </ScrollView>
+        </FadeInView>
     );
 }

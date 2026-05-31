@@ -4,6 +4,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSensors } from '../hooks/useSensors';
 import { SensorItem } from '../types/sensor';
 import { Card, ScreenState, StatusBadge } from '../ui/components';
+import { FadeInView } from '../ui/FadeInView';
 import { colors, spacing } from '../ui/theme';
 
 const statusColors: Record<SensorItem['status'], string> = {
@@ -73,6 +74,7 @@ export default function SensorsScreen() {
     const triggeredCount = sensors?.filter((sensor) => sensor.status === 'triggered' || sensor.status === 'critical').length ?? 0;
 
     return (
+        <FadeInView>
         <ScrollView contentContainerStyle={{ padding: spacing.page, gap: spacing.gap, backgroundColor: colors.background }}>
             <Card accentColor={triggeredCount > 0 ? colors.danger : colors.success}>
                 <Text style={{ color: colors.text, fontSize: 20, fontWeight: '900' }}>
@@ -87,5 +89,6 @@ export default function SensorsScreen() {
                 <SensorRow key={sensor.id} sensor={sensor} />
             ))}
         </ScrollView>
+        </FadeInView>
     );
 }

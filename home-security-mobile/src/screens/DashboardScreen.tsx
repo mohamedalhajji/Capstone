@@ -7,6 +7,7 @@ import { useBackendHealth } from '../hooks/useBackendHealth';
 import { SystemMode } from '../types/system';
 import { EventItem } from '../types/event';
 import { Card, CommandButton, IconMetric, ScreenState, SectionHeader, StatusBadge } from '../ui/components';
+import { FadeInView } from '../ui/FadeInView';
 import { colors, spacing } from '../ui/theme';
 
 function getEmergencyStatus(events: EventItem[] = []) {
@@ -107,6 +108,7 @@ export default function DashboardScreen() {
     };
 
     return (
+        <FadeInView>
         <ScrollView contentContainerStyle={{ padding: spacing.page, gap: spacing.gap, backgroundColor: colors.background }}>
             <Card accentColor={emergencyStatus.color}>
                 <View style={{ flexDirection: 'row', gap: 14, alignItems: 'center' }}>
@@ -229,5 +231,6 @@ export default function DashboardScreen() {
                 )}
             </Card>
         </ScrollView>
+        </FadeInView>
     );
 }
