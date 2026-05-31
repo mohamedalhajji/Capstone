@@ -3,24 +3,76 @@
   "WorkspaceRootPath": "C:\\Users\\moham\\Desktop\\Capstone\\",
   "Documents": [
     {
-      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\moham\\Desktop\\Capstone\\frontend\\src\\App.jsx||{14D17961-FE51-464D-9111-C4AF11D7D99A}",
-      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:frontend\\src\\App.jsx||{14D17961-FE51-464D-9111-C4AF11D7D99A}"
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\moham\\Desktop\\Capstone\\home-security-mobile\\src\\screens\\DashboardScreen.tsx||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:home-security-mobile\\src\\screens\\DashboardScreen.tsx||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}"
     },
     {
-      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\moham\\Desktop\\Capstone\\backend\\server.js||{14D17961-FE51-464D-9111-C4AF11D7D99A}",
-      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:backend\\server.js||{14D17961-FE51-464D-9111-C4AF11D7D99A}"
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\moham\\Desktop\\Capstone\\home-security-mobile\\src\\hooks\\useSimulationActions.ts||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:home-security-mobile\\src\\hooks\\useSimulationActions.ts||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}"
     },
     {
-      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\moham\\Desktop\\Capstone\\backend\\package.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}",
-      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:backend\\package.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}"
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\moham\\Desktop\\Capstone\\home-security-mobile\\src\\hooks\\useEvents.ts||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:home-security-mobile\\src\\hooks\\useEvents.ts||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}"
     },
     {
-      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\moham\\Desktop\\Capstone\\backend\\.env||{8B382828-6202-11D1-8870-0000F87579D2}",
-      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:backend\\.env||{8B382828-6202-11D1-8870-0000F87579D2}"
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\moham\\Desktop\\Capstone\\home-security-mobile\\src\\hooks\\useSensors.ts||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:home-security-mobile\\src\\hooks\\useSensors.ts||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}"
     },
     {
-      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\moham\\Desktop\\Capstone\\backend\\src\\config\\db.js||{14D17961-FE51-464D-9111-C4AF11D7D99A}",
-      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:backend\\src\\config\\db.js||{14D17961-FE51-464D-9111-C4AF11D7D99A}"
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\moham\\Desktop\\Capstone\\home-security-mobile\\src\\hooks\\useSystemState.ts||{8B382828-6202-11D1-8870-0000F87579D2}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:home-security-mobile\\src\\hooks\\useSystemState.ts||{8B382828-6202-11D1-8870-0000F87579D2}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\moham\\Desktop\\Capstone\\home-security-mobile\\src\\services\\systemService.ts||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:home-security-mobile\\src\\services\\systemService.ts||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\moham\\Desktop\\Capstone\\home-security-mobile\\src\\api\\client.ts||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:home-security-mobile\\src\\api\\client.ts||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\moham\\Desktop\\Capstone\\home-security-mobile\\src\\types\\event.ts||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:home-security-mobile\\src\\types\\event.ts||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\moham\\Desktop\\Capstone\\home-security-mobile\\src\\types\\sensor.ts||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:home-security-mobile\\src\\types\\sensor.ts||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\moham\\Desktop\\Capstone\\home-security-mobile\\src\\types\\system.ts||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:home-security-mobile\\src\\types\\system.ts||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\moham\\Desktop\\Capstone\\home-security-mobile\\src\\screens\\SimulationScreen.tsx||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:home-security-mobile\\src\\screens\\SimulationScreen.tsx||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\moham\\Desktop\\Capstone\\home-security-mobile\\src\\screens\\EventsScreen.tsx||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:home-security-mobile\\src\\screens\\EventsScreen.tsx||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\moham\\Desktop\\Capstone\\home-security-mobile\\src\\screens\\SensorsScreen.tsx||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:home-security-mobile\\src\\screens\\SensorsScreen.tsx||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\moham\\Desktop\\Capstone\\home-security-mobile\\src\\navigation\\MainTabs.tsx||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:home-security-mobile\\src\\navigation\\MainTabs.tsx||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\moham\\Desktop\\Capstone\\home-security-mobile\\App.tsx||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:home-security-mobile\\App.tsx||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\moham\\Desktop\\Capstone\\home-security-mobile\\src\\services\\sensorService.ts||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:home-security-mobile\\src\\services\\sensorService.ts||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\moham\\Desktop\\Capstone\\home-security-mobile\\src\\services\\simulationService.ts||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:home-security-mobile\\src\\services\\simulationService.ts||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\moham\\Desktop\\Capstone\\home-security-mobile\\src\\services\\eventService.ts||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:home-security-mobile\\src\\services\\eventService.ts||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}"
     }
   ],
   "DocumentGroupContainers": [
@@ -30,71 +82,244 @@
       "DocumentGroups": [
         {
           "DockedWidth": 200,
-          "SelectedChildIndex": 1,
+          "SelectedChildIndex": 9,
           "Children": [
             {
-              "$type": "Document",
-              "DocumentIndex": 1,
-              "Title": "server.js",
-              "DocumentMoniker": "C:\\Users\\moham\\Desktop\\Capstone\\backend\\server.js",
-              "RelativeDocumentMoniker": "backend\\server.js",
-              "ToolTip": "C:\\Users\\moham\\Desktop\\Capstone\\backend\\server.js",
-              "RelativeToolTip": "backend\\server.js",
-              "ViewState": "AQIAAPQAAAAAAAAAAAAjwAcBAAAeAAAA",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001646|",
-              "WhenOpened": "2026-04-14T14:33:37.388Z",
-              "EditorCaption": ""
+              "$type": "Bookmark",
+              "Name": "ST:0:0:{1c4feeaa-4718-4aa9-859d-94ce25d182ba}"
             },
             {
               "$type": "Document",
-              "DocumentIndex": 0,
-              "Title": "App.jsx",
-              "DocumentMoniker": "C:\\Users\\moham\\Desktop\\Capstone\\frontend\\src\\App.jsx",
-              "RelativeDocumentMoniker": "frontend\\src\\App.jsx",
-              "ToolTip": "C:\\Users\\moham\\Desktop\\Capstone\\frontend\\src\\App.jsx",
-              "RelativeToolTip": "frontend\\src\\App.jsx",
-              "ViewState": "AQIAAN0AAAAAAAAAAAAAwAYBAAATAAAA",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003663|",
-              "WhenOpened": "2026-04-14T14:50:28.342Z",
+              "DocumentIndex": 1,
+              "Title": "useSimulationActions.ts",
+              "DocumentMoniker": "C:\\Users\\moham\\Desktop\\Capstone\\home-security-mobile\\src\\hooks\\useSimulationActions.ts",
+              "RelativeDocumentMoniker": "home-security-mobile\\src\\hooks\\useSimulationActions.ts",
+              "ToolTip": "C:\\Users\\moham\\Desktop\\Capstone\\home-security-mobile\\src\\hooks\\useSimulationActions.ts",
+              "RelativeToolTip": "home-security-mobile\\src\\hooks\\useSimulationActions.ts",
+              "ViewState": "AQIAAAAAAAAAAAAAAAAAAB4AAAABAAAA",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003213|",
+              "WhenOpened": "2026-04-14T18:38:57.502Z",
               "EditorCaption": ""
             },
             {
               "$type": "Document",
               "DocumentIndex": 2,
-              "Title": "package.json",
-              "DocumentMoniker": "C:\\Users\\moham\\Desktop\\Capstone\\backend\\package.json",
-              "RelativeDocumentMoniker": "backend\\package.json",
-              "ToolTip": "C:\\Users\\moham\\Desktop\\Capstone\\backend\\package.json",
-              "RelativeToolTip": "backend\\package.json",
-              "ViewState": "AQIAAAAAAAAAAAAAAAAAABkAAAAAAAAA",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001642|",
-              "WhenOpened": "2026-04-14T14:36:33.306Z",
-              "EditorCaption": ""
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 4,
-              "Title": "db.js",
-              "DocumentMoniker": "C:\\Users\\moham\\Desktop\\Capstone\\backend\\src\\config\\db.js",
-              "RelativeDocumentMoniker": "backend\\src\\config\\db.js",
-              "ToolTip": "C:\\Users\\moham\\Desktop\\Capstone\\backend\\src\\config\\db.js",
-              "RelativeToolTip": "backend\\src\\config\\db.js",
-              "ViewState": "AQIAAAAAAAAAAAAAAAAAAAsAAAAWAAAA",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001646|",
-              "WhenOpened": "2026-04-14T14:33:26.804Z",
+              "Title": "useEvents.ts",
+              "DocumentMoniker": "C:\\Users\\moham\\Desktop\\Capstone\\home-security-mobile\\src\\hooks\\useEvents.ts",
+              "RelativeDocumentMoniker": "home-security-mobile\\src\\hooks\\useEvents.ts",
+              "ToolTip": "C:\\Users\\moham\\Desktop\\Capstone\\home-security-mobile\\src\\hooks\\useEvents.ts",
+              "RelativeToolTip": "home-security-mobile\\src\\hooks\\useEvents.ts",
+              "ViewState": "AQIAAAAAAAAAAAAAAAAAAAkAAAABAAAA",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003213|",
+              "WhenOpened": "2026-04-14T18:38:48.887Z",
               "EditorCaption": ""
             },
             {
               "$type": "Document",
               "DocumentIndex": 3,
-              "Title": ".env",
-              "DocumentMoniker": "C:\\Users\\moham\\Desktop\\Capstone\\backend\\.env",
-              "RelativeDocumentMoniker": "backend\\.env",
-              "ToolTip": "C:\\Users\\moham\\Desktop\\Capstone\\backend\\.env",
-              "RelativeToolTip": "backend\\.env",
-              "ViewState": "AQIAAAAAAAAAAAAAAAAAAAYAAAAZAAAA",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001001|",
-              "WhenOpened": "2026-04-14T14:27:00.738Z",
+              "Title": "useSensors.ts",
+              "DocumentMoniker": "C:\\Users\\moham\\Desktop\\Capstone\\home-security-mobile\\src\\hooks\\useSensors.ts",
+              "RelativeDocumentMoniker": "home-security-mobile\\src\\hooks\\useSensors.ts",
+              "ToolTip": "C:\\Users\\moham\\Desktop\\Capstone\\home-security-mobile\\src\\hooks\\useSensors.ts",
+              "RelativeToolTip": "home-security-mobile\\src\\hooks\\useSensors.ts",
+              "ViewState": "AQIAAAAAAAAAAAAAAAAAAAkAAAABAAAA",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003213|",
+              "WhenOpened": "2026-04-14T18:38:39.819Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 4,
+              "Title": "useSystemState.ts",
+              "DocumentMoniker": "C:\\Users\\moham\\Desktop\\Capstone\\home-security-mobile\\src\\hooks\\useSystemState.ts",
+              "RelativeDocumentMoniker": "home-security-mobile\\src\\hooks\\useSystemState.ts",
+              "ToolTip": "C:\\Users\\moham\\Desktop\\Capstone\\home-security-mobile\\src\\hooks\\useSystemState.ts",
+              "RelativeToolTip": "home-security-mobile\\src\\hooks\\useSystemState.ts",
+              "ViewState": "AQIAAAAAAAAAAAAAAAAAABoAAAABAAAA",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003213|",
+              "WhenOpened": "2026-04-14T18:38:22.138Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 9,
+              "Title": "system.ts",
+              "DocumentMoniker": "C:\\Users\\moham\\Desktop\\Capstone\\home-security-mobile\\src\\types\\system.ts",
+              "RelativeDocumentMoniker": "home-security-mobile\\src\\types\\system.ts",
+              "ToolTip": "C:\\Users\\moham\\Desktop\\Capstone\\home-security-mobile\\src\\types\\system.ts",
+              "RelativeToolTip": "home-security-mobile\\src\\types\\system.ts",
+              "ViewState": "AQIAAAAAAAAAAAAAAAAAAAwAAAABAAAA",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003213|",
+              "WhenOpened": "2026-04-14T18:37:43.472Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 10,
+              "Title": "SimulationScreen.tsx",
+              "DocumentMoniker": "C:\\Users\\moham\\Desktop\\Capstone\\home-security-mobile\\src\\screens\\SimulationScreen.tsx",
+              "RelativeDocumentMoniker": "home-security-mobile\\src\\screens\\SimulationScreen.tsx",
+              "ToolTip": "C:\\Users\\moham\\Desktop\\Capstone\\home-security-mobile\\src\\screens\\SimulationScreen.tsx",
+              "RelativeToolTip": "home-security-mobile\\src\\screens\\SimulationScreen.tsx",
+              "ViewState": "AQIAAAAAAAAAAAAAAAAAABMAAAABAAAA",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003213|",
+              "WhenOpened": "2026-04-14T18:37:06.304Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 11,
+              "Title": "EventsScreen.tsx",
+              "DocumentMoniker": "C:\\Users\\moham\\Desktop\\Capstone\\home-security-mobile\\src\\screens\\EventsScreen.tsx",
+              "RelativeDocumentMoniker": "home-security-mobile\\src\\screens\\EventsScreen.tsx",
+              "ToolTip": "C:\\Users\\moham\\Desktop\\Capstone\\home-security-mobile\\src\\screens\\EventsScreen.tsx",
+              "RelativeToolTip": "home-security-mobile\\src\\screens\\EventsScreen.tsx",
+              "ViewState": "AQIAAAAAAAAAAAAAAAAAABMAAAABAAAA",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003213|",
+              "WhenOpened": "2026-04-14T18:37:02.426Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 12,
+              "Title": "SensorsScreen.tsx",
+              "DocumentMoniker": "C:\\Users\\moham\\Desktop\\Capstone\\home-security-mobile\\src\\screens\\SensorsScreen.tsx",
+              "RelativeDocumentMoniker": "home-security-mobile\\src\\screens\\SensorsScreen.tsx",
+              "ToolTip": "C:\\Users\\moham\\Desktop\\Capstone\\home-security-mobile\\src\\screens\\SensorsScreen.tsx",
+              "RelativeToolTip": "home-security-mobile\\src\\screens\\SensorsScreen.tsx",
+              "ViewState": "AQIAAAAAAAAAAAAAAAAAABMAAAABAAAA",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003213|",
+              "WhenOpened": "2026-04-14T18:36:58.489Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 0,
+              "Title": "DashboardScreen.tsx",
+              "DocumentMoniker": "C:\\Users\\moham\\Desktop\\Capstone\\home-security-mobile\\src\\screens\\DashboardScreen.tsx",
+              "RelativeDocumentMoniker": "home-security-mobile\\src\\screens\\DashboardScreen.tsx",
+              "ToolTip": "C:\\Users\\moham\\Desktop\\Capstone\\home-security-mobile\\src\\screens\\DashboardScreen.tsx",
+              "RelativeToolTip": "home-security-mobile\\src\\screens\\DashboardScreen.tsx",
+              "ViewState": "AQIAAJQAAAAAAAAAAAAAwL0AAAABAAAA",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003213|",
+              "WhenOpened": "2026-04-14T18:36:51.953Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 13,
+              "Title": "MainTabs.tsx",
+              "DocumentMoniker": "C:\\Users\\moham\\Desktop\\Capstone\\home-security-mobile\\src\\navigation\\MainTabs.tsx",
+              "RelativeDocumentMoniker": "home-security-mobile\\src\\navigation\\MainTabs.tsx",
+              "ToolTip": "C:\\Users\\moham\\Desktop\\Capstone\\home-security-mobile\\src\\navigation\\MainTabs.tsx",
+              "RelativeToolTip": "home-security-mobile\\src\\navigation\\MainTabs.tsx",
+              "ViewState": "AQIAAAEAAAAAAAAAAAAAwBEAAAAMAAAA",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003213|",
+              "WhenOpened": "2026-04-14T18:36:17.278Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 14,
+              "Title": "App.tsx",
+              "DocumentMoniker": "C:\\Users\\moham\\Desktop\\Capstone\\home-security-mobile\\App.tsx",
+              "RelativeDocumentMoniker": "home-security-mobile\\App.tsx",
+              "ToolTip": "C:\\Users\\moham\\Desktop\\Capstone\\home-security-mobile\\App.tsx",
+              "RelativeToolTip": "home-security-mobile\\App.tsx",
+              "ViewState": "AQIAAAAAAAAAAAAAAAAAACIAAAABAAAA",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003213|",
+              "WhenOpened": "2026-04-14T18:36:05.464Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 16,
+              "Title": "simulationService.ts",
+              "DocumentMoniker": "C:\\Users\\moham\\Desktop\\Capstone\\home-security-mobile\\src\\services\\simulationService.ts",
+              "RelativeDocumentMoniker": "home-security-mobile\\src\\services\\simulationService.ts",
+              "ToolTip": "C:\\Users\\moham\\Desktop\\Capstone\\home-security-mobile\\src\\services\\simulationService.ts",
+              "RelativeToolTip": "home-security-mobile\\src\\services\\simulationService.ts",
+              "ViewState": "AQIAAAAAAAAAAAAAAAAAAAwAAAACAAAA",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003213|",
+              "WhenOpened": "2026-04-14T18:31:06.99Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 17,
+              "Title": "eventService.ts",
+              "DocumentMoniker": "C:\\Users\\moham\\Desktop\\Capstone\\home-security-mobile\\src\\services\\eventService.ts",
+              "RelativeDocumentMoniker": "home-security-mobile\\src\\services\\eventService.ts",
+              "ToolTip": "C:\\Users\\moham\\Desktop\\Capstone\\home-security-mobile\\src\\services\\eventService.ts",
+              "RelativeToolTip": "home-security-mobile\\src\\services\\eventService.ts",
+              "ViewState": "AQIAAAAAAAAAAAAAAAAAAAgAAAACAAAA",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003213|",
+              "WhenOpened": "2026-04-14T18:31:02.595Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 15,
+              "Title": "sensorService.ts",
+              "DocumentMoniker": "C:\\Users\\moham\\Desktop\\Capstone\\home-security-mobile\\src\\services\\sensorService.ts",
+              "RelativeDocumentMoniker": "home-security-mobile\\src\\services\\sensorService.ts",
+              "ToolTip": "C:\\Users\\moham\\Desktop\\Capstone\\home-security-mobile\\src\\services\\sensorService.ts",
+              "RelativeToolTip": "home-security-mobile\\src\\services\\sensorService.ts",
+              "ViewState": "AQIAAAAAAAAAAAAAAAAAAAgAAAACAAAA",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003213|",
+              "WhenOpened": "2026-04-14T18:30:57.952Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 5,
+              "Title": "systemService.ts",
+              "DocumentMoniker": "C:\\Users\\moham\\Desktop\\Capstone\\home-security-mobile\\src\\services\\systemService.ts",
+              "RelativeDocumentMoniker": "home-security-mobile\\src\\services\\systemService.ts",
+              "ToolTip": "C:\\Users\\moham\\Desktop\\Capstone\\home-security-mobile\\src\\services\\systemService.ts",
+              "RelativeToolTip": "home-security-mobile\\src\\services\\systemService.ts",
+              "ViewState": "AQIAAAAAAAAAAAAAAAAAAA0AAAACAAAA",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003213|",
+              "WhenOpened": "2026-04-14T18:30:48.236Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 6,
+              "Title": "client.ts",
+              "DocumentMoniker": "C:\\Users\\moham\\Desktop\\Capstone\\home-security-mobile\\src\\api\\client.ts",
+              "RelativeDocumentMoniker": "home-security-mobile\\src\\api\\client.ts",
+              "ToolTip": "C:\\Users\\moham\\Desktop\\Capstone\\home-security-mobile\\src\\api\\client.ts",
+              "RelativeToolTip": "home-security-mobile\\src\\api\\client.ts",
+              "ViewState": "AQIAAAAAAAAAAAAAAAAAAAgAAAADAAAA",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003213|",
+              "WhenOpened": "2026-04-14T18:30:33.063Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 7,
+              "Title": "event.ts",
+              "DocumentMoniker": "C:\\Users\\moham\\Desktop\\Capstone\\home-security-mobile\\src\\types\\event.ts",
+              "RelativeDocumentMoniker": "home-security-mobile\\src\\types\\event.ts",
+              "ToolTip": "C:\\Users\\moham\\Desktop\\Capstone\\home-security-mobile\\src\\types\\event.ts",
+              "RelativeToolTip": "home-security-mobile\\src\\types\\event.ts",
+              "ViewState": "AQIAAAAAAAAAAAAAAAAAAAkAAAABAAAA",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003213|",
+              "WhenOpened": "2026-04-14T18:30:26.363Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 8,
+              "Title": "sensor.ts",
+              "DocumentMoniker": "C:\\Users\\moham\\Desktop\\Capstone\\home-security-mobile\\src\\types\\sensor.ts",
+              "RelativeDocumentMoniker": "home-security-mobile\\src\\types\\sensor.ts",
+              "ToolTip": "C:\\Users\\moham\\Desktop\\Capstone\\home-security-mobile\\src\\types\\sensor.ts",
+              "RelativeToolTip": "home-security-mobile\\src\\types\\sensor.ts",
+              "ViewState": "AQIAAAAAAAAAAAAAAAAAABEAAAABAAAA",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003213|",
+              "WhenOpened": "2026-04-14T18:30:20.403Z",
               "EditorCaption": ""
             }
           ]

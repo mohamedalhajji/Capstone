@@ -1,8 +1,15 @@
 {
   "ExpandedNodes": [
     "",
-    "\\backend"
+    "\\home-security-mobile",
+    "\\home-security-mobile\\src",
+    "\\home-security-mobile\\src\\api",
+    "\\home-security-mobile\\src\\hooks",
+    "\\home-security-mobile\\src\\navigation",
+    "\\home-security-mobile\\src\\screens",
+    "\\home-security-mobile\\src\\services",
+    "\\home-security-mobile\\src\\types"
   ],
-  "SelectedNode": "\\backend\\package.json",
+  "SelectedNode": "\\home-security-mobile\\src\\api\\client.ts",
   "PreviewInSolutionExplorer": false
 }
