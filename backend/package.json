@@ -5,7 +5,9 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "nodemon server.js"
+    "dev": "nodemon server.js",
+    "db:init": "node db/init-db.js",
+    "tunnel": "powershell -ExecutionPolicy Bypass -File scripts/start-tunnel.ps1"
   },
   "keywords": [],
   "author": "",

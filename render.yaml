@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: home-security-backend
+    runtime: node
+    rootDir: backend
+    buildCommand: npm install
+    preDeployCommand: npm run db:init
+    startCommand: npm start
+    envVars:
+      - key: NODE_VERSION
+        value: 24
+      - key: JWT_SECRET
+        generateValue: true
+      - key: DATABASE_URL
+        sync: false
+      - key: DB_SSL
+        value: "true"

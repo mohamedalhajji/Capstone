@@ -1,0 +1,5 @@
+env: load .env
+env: export EXPO_PUBLIC_API_URL
+Starting project at C:\Users\moham\سطح المكتب\Capstone\home-security-mobile
+Starting Metro Bundler
+warning: Bundler cache is empty, rebuilding (this may take a minute)

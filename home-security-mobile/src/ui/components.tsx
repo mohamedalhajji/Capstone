@@ -65,9 +65,9 @@ export function SectionHeader({
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
             <View
                 style={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: 10,
+                    width: 34,
+                    height: 34,
+                    borderRadius: radii.md,
                     backgroundColor: `${colors.primary}22`,
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -76,8 +76,8 @@ export function SectionHeader({
                 <MaterialCommunityIcons name={icon} size={20} color={colors.primary} />
             </View>
             <View style={{ flex: 1 }}>
-                <Text style={{ color: colors.text, fontSize: 18, fontWeight: '800' }}>{title}</Text>
-                {!!subtitle && <Text style={{ color: colors.muted, marginTop: 2 }}>{subtitle}</Text>}
+                <Text style={{ color: colors.text, fontSize: 16, fontWeight: '800' }}>{title}</Text>
+                {!!subtitle && <Text style={{ color: colors.muted, marginTop: 2, lineHeight: 19 }}>{subtitle}</Text>}
             </View>
         </View>
     );
@@ -133,7 +133,7 @@ export function IconMetric({
         >
             <MaterialCommunityIcons name={icon} size={24} color={color} />
             <Text style={{ color: colors.muted, fontSize: 12, fontWeight: '700' }}>{label}</Text>
-            <Text style={{ color: colors.text, fontSize: 18, fontWeight: '900' }}>{value}</Text>
+            <Text style={{ color: colors.text, fontSize: 16, fontWeight: '900' }}>{value}</Text>
         </View>
     );
 }
@@ -152,6 +152,10 @@ export function CommandButton({
     tone?: 'default' | 'primary' | 'danger';
 }) {
     const toneColor = tone === 'danger' ? colors.critical : tone === 'primary' ? colors.primary : colors.border;
+    const isPrimary = tone === 'primary';
+    const isDanger = tone === 'danger';
+    const backgroundColor = isPrimary ? colors.primary : isDanger ? '#3f121b' : colors.surfaceAlt;
+    const foregroundColor = isPrimary ? colors.background : colors.text;
 
     return (
         <Pressable
@@ -159,22 +163,82 @@ export function CommandButton({
             disabled={disabled}
             style={{
                 flex: 1,
-                minWidth: 135,
+                minWidth: 118,
                 flexDirection: 'row',
                 alignItems: 'center',
                 justifyContent: 'center',
                 gap: 8,
                 paddingVertical: 14,
-                paddingHorizontal: 12,
+                paddingHorizontal: 10,
                 borderRadius: radii.md,
-                backgroundColor: tone === 'danger' ? '#3f121b' : colors.surfaceAlt,
-                borderWidth: 1,
-                borderColor: toneColor,
+                backgroundColor,
+                borderWidth: isPrimary ? 2 : 1,
+                borderColor: isPrimary ? colors.text : toneColor,
                 opacity: disabled ? 0.55 : 1,
             }}
         >
-            <MaterialCommunityIcons name={icon} size={18} color={tone === 'default' ? colors.text : toneColor} />
-            <Text style={{ color: colors.text, fontWeight: '800' }}>{label}</Text>
+            <MaterialCommunityIcons name={icon} size={18} color={isPrimary ? colors.background : tone === 'default' ? colors.text : toneColor} />
+            <Text style={{ color: foregroundColor, fontWeight: '900', flexShrink: 1, textAlign: 'center' }}>{label}</Text>
         </Pressable>
+    );
+}
+
+export function SegmentedControl<T extends string>({
+    value,
+    options,
+    onChange,
+}: {
+    value: T;
+    options: Array<{ value: T; label: string; icon: IconName }>;
+    onChange: (value: T) => void;
+}) {
+    return (
+        <View
+            style={{
+                flexDirection: 'row',
+                backgroundColor: colors.surfaceAlt,
+                borderRadius: radii.md,
+                borderWidth: 1,
+                borderColor: colors.border,
+                padding: 4,
+                gap: 4,
+            }}
+        >
+            {options.map((option) => {
+                const active = option.value === value;
+                return (
+                    <Pressable
+                        key={option.value}
+                        onPress={() => onChange(option.value)}
+                        style={{
+                            flex: 1,
+                            minHeight: 42,
+                            borderRadius: radii.sm,
+                            backgroundColor: active ? colors.primary : 'transparent',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            flexDirection: 'row',
+                            gap: 6,
+                            paddingHorizontal: 8,
+                        }}
+                    >
+                        <MaterialCommunityIcons
+                            name={option.icon}
+                            size={17}
+                            color={active ? colors.background : colors.muted}
+                        />
+                        <Text
+                            style={{
+                                color: active ? colors.background : colors.text,
+                                fontWeight: '900',
+                                fontSize: 13,
+                            }}
+                        >
+                            {option.label}
+                        </Text>
+                    </Pressable>
+                );
+            })}
+        </View>
     );
 }

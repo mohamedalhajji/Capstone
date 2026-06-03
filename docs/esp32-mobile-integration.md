@@ -49,6 +49,61 @@ npm start
 
 The phone and computer must be on the same Wi-Fi network.
 
+## Remote access outside the local Wi-Fi
+
+For off-site control, the backend must be reachable from the internet. The
+recommended architecture is:
+
+```text
+ESP32 -> Cloud Backend + PostgreSQL <- Mobile App
+```
+
+The ESP32 and mobile app should both talk to the same public backend URL, for
+example:
+
+```text
+https://your-capstone-api.example.com/api
+```
+
+Recommended options:
+
+- Deploy the Express backend and PostgreSQL to a cloud host.
+- Update `API_BASE_URL` in the ESP32 firmware to the public HTTPS API URL.
+- Set `EXPO_PUBLIC_API_URL` in the mobile app to the same public API URL.
+- Keep the ESP32 provisioning hotspot only for local Wi-Fi setup/recovery.
+
+Avoid relying on the ESP32 access point for remote control. The AP is local only:
+it is useful when standing near the prototype, but it cannot be reached from
+outside the house/lab.
+
+See `docs/remote-access.md` for the temporary tunnel and final deployment
+workflow.
+
+## Database and demo fallback
+
+The real persistence layer is PostgreSQL. The schema and seed data live at:
+
+```text
+backend/db/schema.sql
+```
+
+After PostgreSQL is installed and the `home_security_db` database exists, run:
+
+```powershell
+cd backend
+npm run db:init
+```
+
+For live prototype testing when PostgreSQL is not installed or not running, the
+backend falls back to an in-memory store. In that mode, the ESP32/app demo still
+works, but events and access logs disappear when the backend process restarts.
+
+You can check which storage mode is active at:
+
+```text
+GET /api/storage-status
+```
+
 ## ESP32 endpoints
 
 ### Sensor event
@@ -111,9 +166,73 @@ Response:
 The ESP32 can poll this endpoint to learn the latest app-selected mode and
 actuator state.
 
-## Firmware option in this repo
+In the integrated firmware, the ESP32 uses this response to:
 
-I added an HTTP-based firmware draft at:
+- Arm/disarm and move the servo door from app-selected mode changes.
+- Open/close the servo door from `door_locked`.
+- Pulse the buzzer from `buzzer_on`.
+- Run the pump/sprinkler outputs from `sprinkler_on`.
+- Run a provisioning reset when `command` is `RESETWIFI`.
+
+### Request ESP32 provisioning hotspot
+
+```http
+POST /api/esp/request-wifi-reset
+```
+
+This stores a one-time `RESETWIFI` command. On the next ESP32 poll, the backend
+returns:
+
+```json
+{
+  "command": "RESETWIFI"
+}
+```
+
+The ESP32 clears saved Wi-Fi credentials and starts the `ESP32_Config_Safe`
+access point. After this, the normal app/backend connection stops until the ESP32
+is provisioned onto Wi-Fi again.
+
+### Physical ESP32 state sync
+
+```http
+POST /api/esp/system-state
+Content-Type: application/json
+```
+
+```json
+{
+  "mode": "away",
+  "door_locked": true,
+  "buzzer_on": false,
+  "sprinkler_on": false
+}
+```
+
+The integrated firmware uses this endpoint after local hardware actions such as
+NFC arm/disarm, door open/close, alarm activation, and pump clearing. This keeps
+the app database aligned with the physical prototype while the ESP32 remains the
+authority for immediate safety behavior.
+
+## Firmware options in this repo
+
+The real hardware baseline copied from the attached working code is preserved at:
+
+```text
+firmware/home_security_esp32_hardware_baseline.ino
+```
+
+The recommended integrated firmware for the final prototype is:
+
+```text
+firmware/home_security_esp32_integrated/home_security_esp32_integrated.ino
+```
+
+It keeps the working BLE, emergency Wi-Fi provisioning, local web dashboard,
+RFID, pumps, buzzer, servo, and sensor logic, then adds backend/mobile
+integration.
+
+The older HTTP-only firmware draft remains at:
 
 ```text
 firmware/home_security_esp32_http/home_security_esp32_http.ino
@@ -128,37 +247,38 @@ changes:
 - Polls `GET /api/esp/commands` so app mode changes can reach the ESP32.
 - Changes flame sensors from `digitalRead()` to `analogRead()`.
 
-Before uploading, update:
+For the integrated firmware, update the backend URL before uploading:
 
 ```cpp
-const char* WIFI_SSID = "YOUR_WIFI_NAME";
-const char* WIFI_PASSWORD = "YOUR_WIFI_PASSWORD";
 const char* API_BASE_URL = "http://192.168.1.102:5000/api";
 ```
+
+Wi-Fi credentials are configured through the ESP32 emergency provisioning portal
+from the real hardware firmware. If no credentials are saved, or if connection
+fails, the ESP32 starts the `ESP32_Config_Safe` access point.
 
 If the backend computer gets a different local IP address, change
 `API_BASE_URL`.
 
 ## Flame sensor analog calibration
 
-The new firmware uses:
+The integrated firmware currently uses the threshold from the working hardware
+code:
 
 ```cpp
-int FLAME_THRESHOLD = 1200;
-bool FLAME_ACTIVE_LOW_ANALOG = true;
+int FLAME_THRESHOLD = 4050;
 ```
 
-Most flame modules output a lower analog value when flame/IR is detected, but
-the exact threshold depends on the sensor module, wiring, distance, and ambient
-light. During testing, open Serial Monitor and compare the printed flame analog
-values for:
+The flame modules are treated as active-low analog sensors: lower readings mean
+more flame/IR detected. The exact threshold still depends on the sensor module,
+wiring, distance, and ambient light. During testing, open Serial Monitor and
+compare the printed flame analog values for:
 
 - no flame / normal lighting
 - flame close to the sensor
 - flame at the expected detection distance
 
-Then set `FLAME_THRESHOLD` between the safe and danger readings. If their module
-works in the opposite direction, set `FLAME_ACTIVE_LOW_ANALOG` to `false`.
+Then set `FLAME_THRESHOLD` between the safe and danger readings.
 
 ## HTTP vs MQTT recommendation
 

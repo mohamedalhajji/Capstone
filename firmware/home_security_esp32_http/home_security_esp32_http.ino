@@ -4,6 +4,7 @@
 #include <Wire.h>
 #include <WiFi.h>
 #include <HTTPClient.h>
+#include <string.h>
 
 #define RELAY_ON  LOW
 #define RELAY_OFF HIGH
@@ -26,7 +27,11 @@ const unsigned long REPORT_COOLDOWN_MS = 5000;
 const unsigned long WIFI_RETRY_INTERVAL_MS = 10000;
 const unsigned long COMMAND_POLL_INTERVAL_MS = 3000;
 
-unsigned long lastReportTime = 0;
+unsigned long lastMotionReportTime = 0;
+unsigned long lastGasReportTime = 0;
+unsigned long lastFlameReportTime = 0;
+unsigned long lastDoorReportTime = 0;
+unsigned long lastVibrationReportTime = 0;
 unsigned long lastWifiRetryTime = 0;
 unsigned long lastCommandPollTime = 0;
 
@@ -59,7 +64,7 @@ int SMOKE_THRESHOLD = 2000;
 
 // Most flame modules produce a lower analog value when flame/IR is detected.
 // Calibrate this from Serial Monitor readings in the real prototype.
-int FLAME_THRESHOLD = 1200;
+int FLAME_THRESHOLD = 4050;
 bool FLAME_ACTIVE_LOW_ANALOG = true;
 
 bool systemActive = true;
@@ -159,10 +164,21 @@ bool postJson(String path, String body) {
   return code >= 200 && code < 300;
 }
 
-void reportSensorEvent(const char* sensorName) {
-  if (millis() - lastReportTime < REPORT_COOLDOWN_MS) return;
+unsigned long* reportTimerForSensor(const char* sensorName) {
+  if (strcmp(sensorName, SENSOR_MOTION) == 0) return &lastMotionReportTime;
+  if (strcmp(sensorName, SENSOR_GAS) == 0) return &lastGasReportTime;
+  if (strcmp(sensorName, SENSOR_FLAME) == 0) return &lastFlameReportTime;
+  if (strcmp(sensorName, SENSOR_DOOR) == 0) return &lastDoorReportTime;
+  if (strcmp(sensorName, SENSOR_VIBRATION) == 0) return &lastVibrationReportTime;
 
-  lastReportTime = millis();
+  return &lastGasReportTime;
+}
+
+void reportSensorEvent(const char* sensorName) {
+  unsigned long* lastReportTime = reportTimerForSensor(sensorName);
+  if (*lastReportTime != 0 && millis() - *lastReportTime < REPORT_COOLDOWN_MS) return;
+
+  *lastReportTime = millis();
   String body = String("{\"sensor_name\":\"") + sensorName + "\"}";
   postJson("/esp/sensor-event", body);
 }
@@ -206,9 +222,19 @@ void pollBackendCommands() {
   bool backendAway = response.indexOf("\"mode\":\"away\"") >= 0;
   bool backendHome = response.indexOf("\"mode\":\"home\"") >= 0;
   bool backendDisarmed = response.indexOf("\"mode\":\"disarmed\"") >= 0;
+  bool backendDoorLocked = response.indexOf("\"door_locked\":true") >= 0;
+  bool backendDoorUnlocked = response.indexOf("\"door_locked\":false") >= 0;
 
   if (backendAway) awayMode = true;
   if (backendHome || backendDisarmed) awayMode = false;
+  if (backendDoorLocked && doorOpen) {
+    doorServo.write(CLOSE_ANGLE);
+    doorOpen = false;
+  }
+  if (backendDoorUnlocked && !doorOpen) {
+    doorServo.write(OPEN_ANGLE);
+    doorOpen = true;
+  }
 }
 
 bool isFlameDetected(int analogValue) {
@@ -248,7 +274,25 @@ void setup() {
   Serial.begin(115200);
   delay(100);
 
-  connectWiFi();
+  pinMode(PUMP_1_PIN, INPUT_PULLUP);
+  pinMode(PUMP_2_PIN, INPUT_PULLUP);
+  pinMode(PUMP_3_PIN, INPUT_PULLUP);
+  pinMode(BUZZER_PIN, INPUT_PULLUP);
+
+  digitalWrite(PUMP_1_PIN, RELAY_OFF);
+  digitalWrite(PUMP_2_PIN, RELAY_OFF);
+  digitalWrite(PUMP_3_PIN, RELAY_OFF);
+  digitalWrite(BUZZER_PIN, RELAY_OFF);
+
+  pinMode(PUMP_1_PIN, OUTPUT);
+  pinMode(PUMP_2_PIN, OUTPUT);
+  pinMode(PUMP_3_PIN, OUTPUT);
+  pinMode(BUZZER_PIN, OUTPUT);
+  pinMode(PIR_1_PIN, INPUT);
+  pinMode(PIR_2_PIN, INPUT);
+  pinMode(FLAME_1_PIN, INPUT);
+  pinMode(FLAME_2_PIN, INPUT);
+  pinMode(FLAME_3_PIN, INPUT);
 
   SPI.begin(18, 19, 23, 5);
   rfid.PCD_Init();
@@ -268,21 +312,7 @@ void setup() {
   doorServo.attach(SERVO_PIN);
   doorServo.write(OPEN_ANGLE);
 
-  digitalWrite(PUMP_1_PIN, RELAY_OFF);
-  digitalWrite(PUMP_2_PIN, RELAY_OFF);
-  digitalWrite(PUMP_3_PIN, RELAY_OFF);
-  digitalWrite(BUZZER_PIN, RELAY_OFF);
-
-  pinMode(PUMP_1_PIN, OUTPUT);
-  pinMode(PUMP_2_PIN, OUTPUT);
-  pinMode(PUMP_3_PIN, OUTPUT);
-  pinMode(BUZZER_PIN, OUTPUT);
-  pinMode(PIR_1_PIN, INPUT);
-  pinMode(PIR_2_PIN, INPUT);
-
-  pinMode(FLAME_1_PIN, INPUT);
-  pinMode(FLAME_2_PIN, INPUT);
-  pinMode(FLAME_3_PIN, INPUT);
+  connectWiFi();
 }
 
 void loop() {

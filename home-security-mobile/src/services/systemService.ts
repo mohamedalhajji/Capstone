@@ -32,11 +32,15 @@ export const systemService = {
         return mapSystemState(data);
     },
 
-    async resetSystem(): Promise<void> {
+    async fullReset(): Promise<void> {
+        await api.post('/full-reset');
+    },
+
+    async resetSensors(): Promise<void> {
         await api.post('/reset-system');
     },
 
-    async fullReset(): Promise<void> {
-        await api.post('/full-reset');
+    async requestEspWifiReset(): Promise<void> {
+        await api.post('/esp/request-wifi-reset');
     },
 };

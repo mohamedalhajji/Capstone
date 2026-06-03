@@ -10,6 +10,7 @@ export function useSimulationActions() {
             queryClient.invalidateQueries({ queryKey: ['system-state'] });
             queryClient.invalidateQueries({ queryKey: ['sensors'] });
             queryClient.invalidateQueries({ queryKey: ['events'] });
+            queryClient.invalidateQueries({ queryKey: ['access-logs'] });
         },
     });
 
@@ -20,6 +21,7 @@ export function useSimulationActions() {
             queryClient.invalidateQueries({ queryKey: ['system-state'] });
             queryClient.invalidateQueries({ queryKey: ['sensors'] });
             queryClient.invalidateQueries({ queryKey: ['events'] });
+            queryClient.invalidateQueries({ queryKey: ['access-logs'] });
         },
     });
 

@@ -56,8 +56,6 @@ export default function DashboardScreen() {
         isError,
         setMode,
         settingMode,
-        resetSystem,
-        resettingSystem,
         fullReset,
         fullResetting,
     } = useSystemState();
@@ -80,18 +78,16 @@ export default function DashboardScreen() {
     const recentEvents = events?.slice(0, 3) ?? [];
     const emergencyStatus = getEmergencyStatus(events?.slice(0, 10) ?? []);
     const connected = !!health?.ok && !healthError;
-    const resetting = resettingSystem || fullResetting;
-
     const changeMode = (mode: SystemMode) => {
         setMode(mode).catch((error) => {
             Alert.alert('Mode change failed', error instanceof Error ? error.message : 'Unknown error');
         });
     };
 
-    const confirmFullReset = () => {
+    const confirmClearData = () => {
         Alert.alert(
-            'Clear all history?',
-            'This removes events, notifications, and access logs from the database.',
+            'Clear data and reset?',
+            'This clears history and stops active buzzer, sprinkler, and sensor alerts.',
             [
                 { text: 'Cancel', style: 'cancel' },
                 {
@@ -99,7 +95,7 @@ export default function DashboardScreen() {
                     style: 'destructive',
                     onPress: () => {
                         fullReset().catch((error) => {
-                            Alert.alert('Full reset failed', error instanceof Error ? error.message : 'Unknown error');
+                            Alert.alert('Clear failed', error instanceof Error ? error.message : 'Unknown error');
                         });
                     },
                 },
@@ -161,7 +157,7 @@ export default function DashboardScreen() {
             </View>
 
             <Card>
-                <SectionHeader icon="shield-home-outline" title="Arm System" subtitle="Choose the security mode for the prototype." />
+                <SectionHeader icon="shield-home-outline" title="Arm System" />
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
                     <CommandButton
                         label="Disarm"
@@ -188,30 +184,18 @@ export default function DashboardScreen() {
             </Card>
 
             <Card>
-                <SectionHeader icon="restart" title="System Actions" subtitle="Reset outputs after a test or clear demo history." />
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
-                    <CommandButton
-                        label="Reset"
-                        icon="restore"
-                        disabled={resetting}
-                        onPress={() => {
-                            resetSystem().catch((error) => {
-                                Alert.alert('Reset failed', error instanceof Error ? error.message : 'Unknown error');
-                            });
-                        }}
-                    />
-                    <CommandButton
-                        label="Clear History"
-                        icon="delete-outline"
-                        tone="danger"
-                        disabled={resetting}
-                        onPress={confirmFullReset}
-                    />
-                </View>
+                <SectionHeader icon="restore" title="Clear Data" />
+                <CommandButton
+                    label="Clear and Reset"
+                    icon="delete-sweep-outline"
+                    tone="danger"
+                    disabled={fullResetting}
+                    onPress={confirmClearData}
+                />
             </Card>
 
             <Card>
-                <SectionHeader icon="timeline-clock-outline" title="Recent Events" subtitle="Latest alerts received from simulation or ESP32." />
+                <SectionHeader icon="timeline-clock-outline" title="Recent Events" />
                 {recentEvents.length === 0 ? (
                     <Text style={{ color: colors.muted }}>No events recorded yet.</Text>
                 ) : (

@@ -19,15 +19,6 @@ export function useSystemState() {
     },
   });
 
-  const resetMutation = useMutation({
-    mutationFn: systemService.resetSystem,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['system-state'] });
-      queryClient.invalidateQueries({ queryKey: ['sensors'] });
-      queryClient.invalidateQueries({ queryKey: ['events'] });
-    },
-  });
-
   const fullResetMutation = useMutation({
     mutationFn: systemService.fullReset,
     onSuccess: () => {
@@ -38,13 +29,31 @@ export function useSystemState() {
     },
   });
 
+  const resetSensorsMutation = useMutation({
+    mutationFn: systemService.resetSensors,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['system-state'] });
+      queryClient.invalidateQueries({ queryKey: ['sensors'] });
+      queryClient.invalidateQueries({ queryKey: ['events'] });
+    },
+  });
+
+  const espWifiResetMutation = useMutation({
+    mutationFn: systemService.requestEspWifiReset,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['system-state'] });
+    },
+  });
+
   return {
     ...stateQuery,
     setMode: setModeMutation.mutateAsync,
     settingMode: setModeMutation.isPending,
-    resetSystem: resetMutation.mutateAsync,
-    resettingSystem: resetMutation.isPending,
     fullReset: fullResetMutation.mutateAsync,
     fullResetting: fullResetMutation.isPending,
+    resetSensors: resetSensorsMutation.mutateAsync,
+    resettingSensors: resetSensorsMutation.isPending,
+    requestEspWifiReset: espWifiResetMutation.mutateAsync,
+    requestingEspWifiReset: espWifiResetMutation.isPending,
   };
 }
