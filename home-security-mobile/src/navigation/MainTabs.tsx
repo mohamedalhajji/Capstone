@@ -65,13 +65,9 @@ export default function MainTabs() {
                 ),
                 tabBarActiveTintColor: colors.primary,
                 tabBarInactiveTintColor: colors.subtle,
-                animation: 'fade',
-                transitionSpec: {
-                    animation: 'timing',
-                    config: {
-                        duration: 180,
-                    },
-                },
+                animation: 'none',
+                lazy: false,
+                freezeOnBlur: false,
                 sceneStyle: {
                     backgroundColor: colors.background,
                 },

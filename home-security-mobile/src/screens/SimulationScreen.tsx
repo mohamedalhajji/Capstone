@@ -3,6 +3,7 @@ import { Alert, ScrollView, Text, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSimulationActions } from '../hooks/useSimulationActions';
 import { Card, CommandButton, SectionHeader } from '../ui/components';
+import { FadeInView } from '../ui/FadeInView';
 import { colors, spacing } from '../ui/theme';
 
 const simulatedSensors: Array<{
@@ -30,6 +31,7 @@ export default function SimulationScreen() {
     };
 
     return (
+        <FadeInView>
         <ScrollView contentContainerStyle={{ padding: spacing.page, gap: spacing.gap, backgroundColor: colors.background }}>
             <Card>
                 <SectionHeader
@@ -83,5 +85,6 @@ export default function SimulationScreen() {
                 </View>
             </Card>
         </ScrollView>
+        </FadeInView>
     );
 }
