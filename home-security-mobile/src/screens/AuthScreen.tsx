@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Alert, KeyboardAvoidingView, Platform, Pressable, Text, TextInput, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { getApiErrorMessage } from '../api/client';
+import { getApiBaseUrl, getApiErrorMessage } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import { colors, radii, spacing } from '../ui/theme';
 
@@ -158,6 +158,9 @@ export default function AuthScreen() {
                         {authenticating ? 'Please wait...' : mode === 'signup' ? 'Create Account' : 'Login'}
                     </Text>
                 </Pressable>
+                <Text style={{ color: colors.subtle, fontSize: 11, textAlign: 'center' }}>
+                    API: {getApiBaseUrl()}
+                </Text>
             </View>
         </KeyboardAvoidingView>
     );

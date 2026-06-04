@@ -6,6 +6,7 @@ type BackendSystemState = {
     buzzer_on: boolean;
     sprinkler_on: boolean;
     door_locked: boolean;
+    esp_last_seen?: string | null;
     updated_at: string;
 };
 
@@ -18,6 +19,7 @@ function mapSystemState(row: BackendSystemState): SystemState {
             doorLocked: row.door_locked,
         },
         lastUpdated: row.updated_at,
+        espLastSeen: row.esp_last_seen ?? null,
     };
 }
 

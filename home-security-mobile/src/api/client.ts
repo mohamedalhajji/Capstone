@@ -2,11 +2,11 @@ import axios from 'axios';
 
 export const PRODUCTION_API_URL =
     process.env.EXPO_PUBLIC_API_URL ??
-    'https://home-security-backend.onrender.com/api';
+    'https://capstone-msv5.onrender.com/api';
 
 export const api = axios.create({
     baseURL: PRODUCTION_API_URL,
-    timeout: 10000,
+    timeout: 60000,
     headers: {
         'Content-Type': 'application/json',
     },
@@ -30,7 +30,12 @@ export function getApiErrorMessage(error: unknown, fallback = 'Unknown error') {
         if (typeof message === 'string' && message.trim().length > 0) {
             return message;
         }
+        const url = `${error.config?.baseURL ?? ''}${error.config?.url ?? ''}`;
+        if (error.response?.status) {
+            return `Request failed with status code ${error.response.status}${url ? ` (${url})` : ''}`;
+        }
     }
 
     return error instanceof Error ? error.message : fallback;
 }
+

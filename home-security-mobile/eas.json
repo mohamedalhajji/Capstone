@@ -8,13 +8,13 @@
       "developmentClient": true,
       "distribution": "internal",
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://home-security-backend.onrender.com/api"
+        "EXPO_PUBLIC_API_URL": "https://capstone-msv5.onrender.com/api"
       }
     },
     "preview": {
       "distribution": "internal",
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://home-security-backend.onrender.com/api"
+        "EXPO_PUBLIC_API_URL": "https://capstone-msv5.onrender.com/api"
       },
       "android": {
         "buildType": "apk"
@@ -22,8 +22,9 @@
     },
     "production": {
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://home-security-backend.onrender.com/api"
+        "EXPO_PUBLIC_API_URL": "https://capstone-msv5.onrender.com/api"
       }
     }
   }
 }
+

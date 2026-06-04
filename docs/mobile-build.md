@@ -1,51 +1,41 @@
 # Mobile App Build
 
-The Expo app is configured for EAS builds.
+The Expo preview build is configured to use the production Render backend.
 
-## Current API Mode
-
-The preview build uses:
+## Current API
 
 ```text
-https://bias-customized-specific-profit.trycloudflare.com/api
+https://capstone-msv5.onrender.com/api
 ```
 
-This URL is a temporary Cloudflare tunnel. If the tunnel changes, update:
+This is set in:
 
 - `home-security-mobile/.env`
 - `home-security-mobile/eas.json`
+- `home-security-mobile/src/api/client.ts`
 
-## Login
-
-```powershell
-cd home-security-mobile
-npx eas login
-```
-
-## iPhone Build
-
-For a physical iPhone, use:
+## Build Android Preview APK
 
 ```powershell
-npx eas build --platform ios --profile preview
+cd "C:\Users\moham\سطح المكتب\Capstone\home-security-mobile"
+$env:EAS_NO_VCS="1"
+npx.cmd eas build --platform android --profile preview
 ```
 
-EAS may ask for Apple account access and device registration. This is normal for
-installing an iOS app outside the App Store/TestFlight.
+The result is an installable APK link from Expo.
 
-## Android Build
-
-For Android APK testing:
+## Build iPhone Preview
 
 ```powershell
-npx eas build --platform android --profile preview
+cd "C:\Users\moham\سطح المكتب\Capstone\home-security-mobile"
+$env:EAS_NO_VCS="1"
+npx.cmd eas build --platform ios --profile preview
 ```
 
-This creates an installable APK link.
+iOS preview builds may ask for Apple account access and device registration.
 
 ## Notes
 
-- Expo Go is a development shell and needs Metro. It is not a packaged app.
+- Expo Go is only for development.
 - A preview EAS build includes the JavaScript bundle in the installed app.
-- The installed app can work over cellular as long as the backend API URL is
-  public and reachable.
+- The installed app works over cellular or any Wi-Fi as long as the Render backend is reachable.

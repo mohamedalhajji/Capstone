@@ -1,15 +1,16 @@
 {
   "ExpandedNodes": [
     "",
+    "\\backend\\db",
+    "\\backend\\src",
+    "\\backend\\src\\config",
+    "\\frontend\\public",
+    "\\frontend\\src",
     "\\home-security-mobile",
     "\\home-security-mobile\\src",
-    "\\home-security-mobile\\src\\api",
-    "\\home-security-mobile\\src\\hooks",
-    "\\home-security-mobile\\src\\navigation",
     "\\home-security-mobile\\src\\screens",
-    "\\home-security-mobile\\src\\services",
-    "\\home-security-mobile\\src\\types"
+    "\\home-security-mobile\\src\\services"
   ],
-  "SelectedNode": "\\home-security-mobile\\src\\api\\client.ts",
+  "SelectedNode": "\\home-security-mobile\\src\\screens\\SettingsScreen.tsx",
   "PreviewInSolutionExplorer": false
 }

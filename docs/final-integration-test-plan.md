@@ -1,87 +1,58 @@
 # Final Integration Test Plan
 
-This checklist maps the final demo tests to the capstone report objectives:
+This checklist maps the final demo tests to the capstone objectives:
 intrusion detection, fire/gas detection, NFC access control, remote monitoring,
-event history, and reliable ESP32 operation after USB disconnection.
+event history, user authentication, cloud database persistence, and reliable
+ESP32 operation.
 
 ## System Setup
 
-1. Start the backend:
-
-   ```powershell
-   cd backend
-   npm start
-   ```
-
-2. Confirm backend health:
+1. Confirm the Render backend health:
 
    ```text
-   http://<computer-lan-ip>:5000/api/health
+   https://capstone-msv5.onrender.com/api/health
    ```
 
-   If PostgreSQL is not running, the backend returns `memory-fallback`. This is
-   acceptable for prototype demo testing, but final persistent database testing
-   should use PostgreSQL.
-
-3. Open the ESP32 local dashboard:
+2. Confirm the mobile app API is:
 
    ```text
-   http://<esp32-ip>
+   https://capstone-msv5.onrender.com/api
    ```
 
-4. Open the web dashboard:
+3. Upload the integrated ESP32 firmware:
 
-   ```powershell
-   cd frontend
-   npm run dev
+   ```text
+   C:\Users\moham\سطح المكتب\Capstone\firmware\home_security_esp32_integrated\home_security_esp32_integrated.ino
    ```
 
-5. For the mobile app, set the backend URL to the computer LAN IP:
+4. Confirm the ESP32 Serial Monitor shows successful backend requests:
 
-   ```powershell
-   cd home-security-mobile
-   $env:EXPO_PUBLIC_API_URL='http://<computer-lan-ip>:5000/api'
-   npm start
+   ```text
+   [API] ... -> 200
    ```
-
-## Database Setup
-
-Install PostgreSQL, create the database named in `backend/.env`, then run:
-
-```powershell
-cd backend
-npm run db:init
-```
-
-The schema creates:
-
-- `system_state`
-- `sensors`
-- `events`
-- `notifications`
-- `access_logs`
-
-It also seeds the sensor names used by the ESP32 firmware.
 
 ## Scenario Tests
 
-| Test | Action | Expected Local Hardware Result | Expected Backend/App Result |
+| Test | Action | Expected Hardware Result | Expected App/Backend Result |
 | --- | --- | --- | --- |
-| Backend command polling | Set mode to Away in app/web | ESP32 enters armed mode | `/api/esp/commands` returns `mode: away` |
-| Authorized NFC | Scan authorized card | Door opens/disarms, buzzer clears | Access log granted, event/notification recorded |
-| Unauthorized NFC | Scan wrong card | Buzzer warning; alarm after repeated failures | Access log denied, unauthorized event recorded |
-| PIR intrusion | Arm Away, trigger PIR | Buzzer alarm | Motion event with high severity |
-| Reed/vibration intrusion | Arm Away, open reed or trigger vibration | Buzzer alarm | Door/vibration event recorded |
-| Flame detection | Trigger flame sensor carefully | Correct pump activates, buzzer alarm | Flame critical event, sprinkler state active |
-| Smoke/gas detection | Trigger MQ/smoke sensor | Buzzer alarm | Gas high-severity event |
-| Reset | Press Reset in app/web | Buzzer/sprinkler state clears | `system_state` outputs reset |
-| USB removal | Run from external power | System continues reading sensors | ESP32 remains accessible by Wi-Fi |
+| Signup/login | Create account, close app, reopen | No hardware action | Session is remembered; user data saved in Neon |
+| Remote command | Use app on cellular or different Wi-Fi | ESP32 receives command through Render | State updates in the app |
+| Arm away | Set mode to Away | ESP32 enters armed mode | System mode changes to away |
+| Disarm/reset | Press Clear/Reset | Buzzer, pump, and active outputs stop | System clears active alarm state |
+| Authorized NFC | Scan authorized card | Door opens/disarms, buzzer clears | Access log granted |
+| Unauthorized NFC | Scan wrong card | Warning/alarm behavior triggers | Access log denied and event recorded |
+| PIR intrusion | Arm Away, trigger PIR | Buzzer alarm | Motion event appears in Activity |
+| Door/reed intrusion | Arm Away, open door | Buzzer alarm | Door event appears in Activity |
+| Vibration intrusion | Trigger vibration | Buzzer alarm | Vibration event appears in Activity |
+| Flame detection | Trigger flame sensor carefully | Pump activates and buzzer alarms | Flame event appears in Activity |
+| Smoke/gas detection | Trigger MQ/smoke sensor | Buzzer alarm | Gas event appears in Activity |
+| Wi-Fi setup | Request ESP32 Wi-Fi setup while ESP32 is online | ESP32 starts setup portal | App shows command sent |
 
 ## Evidence To Capture
 
-- Serial Monitor showing `[API] POST ... -> 200`.
-- ESP32 local dashboard screenshot.
-- Web/mobile dashboard screenshot with event history.
-- Access log screenshot after NFC tests.
-- Photo/video of pump activation from flame test.
-- Short note confirming operation from external power after USB disconnect.
+- Mobile login/signup screenshots.
+- Activity tab showing physical sensor events.
+- Access log after NFC tests.
+- Serial Monitor showing successful Render API calls.
+- Short video of remote app command controlling the physical house.
+- Photo/video of alarm and pump behavior.

@@ -78,6 +78,8 @@ export default function DashboardScreen() {
     const recentEvents = events?.slice(0, 3) ?? [];
     const emergencyStatus = getEmergencyStatus(events?.slice(0, 10) ?? []);
     const connected = !!health?.ok && !healthError;
+    const espLastSeenMs = systemState.espLastSeen ? new Date(systemState.espLastSeen).getTime() : 0;
+    const houseOnline = espLastSeenMs > 0 && Date.now() - espLastSeenMs < 15000;
     const changeMode = (mode: SystemMode) => {
         setMode(mode).catch((error) => {
             Alert.alert('Mode change failed', error instanceof Error ? error.message : 'Unknown error');
@@ -141,6 +143,12 @@ export default function DashboardScreen() {
                     label="Backend"
                     value={connected ? 'ONLINE' : checkingHealth ? 'CHECKING' : 'OFFLINE'}
                     color={connected ? colors.success : colors.danger}
+                />
+                <IconMetric
+                    icon={houseOnline ? 'home-outline' : 'alert-circle-outline'}
+                    label="House"
+                    value={houseOnline ? 'ONLINE' : 'OFFLINE'}
+                    color={houseOnline ? colors.success : colors.warning}
                 />
                 <IconMetric
                     icon={systemState.actuators.doorLocked ? 'lock-outline' : 'lock-open-outline'}

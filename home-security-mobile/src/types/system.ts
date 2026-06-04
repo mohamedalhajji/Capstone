@@ -10,4 +10,5 @@ export interface SystemState {
     mode: SystemMode;
     actuators: ActuatorState;
     lastUpdated: string;
+    espLastSeen?: string | null;
 }

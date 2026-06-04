@@ -33,6 +33,7 @@ const memoryState = {
   sprinkler_on: false,
   door_locked: true,
   esp_pending_command: null,
+  esp_last_seen: null,
   updated_at: new Date().toISOString(),
 };
 
@@ -126,20 +127,28 @@ async function setSystemMode(mode) {
     throw error;
   }
 
+  const espCommand = mode === "away" ? "ON" : "OFF";
+
   try {
     const result = await pool.query(
       `UPDATE system_state
        SET current_mode = $1,
+           esp_pending_command = $2,
+           buzzer_on = FALSE,
+           sprinkler_on = FALSE,
            updated_at = CURRENT_TIMESTAMP
        WHERE id = 1
        RETURNING *`,
-      [mode]
+      [mode, espCommand]
     );
 
     return result.rows[0];
   } catch (error) {
     if (!isDbUnavailable(error)) throw error;
     memoryState.current_mode = mode;
+    memoryState.esp_pending_command = espCommand;
+    memoryState.buzzer_on = false;
+    memoryState.sprinkler_on = false;
     touchMemoryState();
     return clone(memoryState);
   }
@@ -836,6 +845,32 @@ app.post("/api/esp/request-wifi-reset", requireAuth, async (req, res) => {
   }
 });
 
+app.post("/api/esp/clear-pending-command", requireAuth, async (req, res) => {
+  try {
+    let state;
+
+    try {
+      const result = await pool.query(
+        `UPDATE system_state
+         SET esp_pending_command = NULL,
+             updated_at = CURRENT_TIMESTAMP
+         WHERE id = 1
+         RETURNING *`
+      );
+      state = result.rows[0];
+    } catch (error) {
+      if (!isDbUnavailable(error)) throw error;
+      memoryState.esp_pending_command = null;
+      touchMemoryState();
+      state = clone(memoryState);
+    }
+
+    res.json({ success: true, state });
+  } catch (error) {
+    sendError(res, error);
+  }
+});
+
 app.get("/api/access-logs", requireAuth, async (req, res) => {
   try {
     const result = await pool.query(
@@ -975,7 +1010,24 @@ app.post("/api/esp/system-state", async (req, res) => {
 
 app.get("/api/esp/commands", async (req, res) => {
   try {
-    const state = await getSystemState();
+    let state;
+
+    try {
+      const result = await pool.query(
+        `UPDATE system_state
+         SET esp_last_seen = CURRENT_TIMESTAMP,
+             updated_at = CURRENT_TIMESTAMP
+         WHERE id = 1
+         RETURNING *`
+      );
+      state = result.rows[0];
+    } catch (error) {
+      if (!isDbUnavailable(error)) throw error;
+      memoryState.esp_last_seen = new Date().toISOString();
+      touchMemoryState();
+      state = clone(memoryState);
+    }
+
     const command = state.esp_pending_command || null;
 
     if (command) {

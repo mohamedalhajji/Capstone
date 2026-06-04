@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 
-const API = import.meta.env.VITE_API_URL ?? "https://home-security-backend.onrender.com";
+const API = import.meta.env.VITE_API_URL ?? "https://capstone-msv5.onrender.com";
 const SESSION_KEY = "home-security-web-session";
 
 function App() {

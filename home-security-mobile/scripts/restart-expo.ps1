@@ -12,7 +12,7 @@ foreach ($processId in $pids) {
 $env:EXPO_PUBLIC_API_URL = if ($env:EXPO_PUBLIC_API_URL) {
   $env:EXPO_PUBLIC_API_URL
 } else {
-  "http://192.168.1.110:5000/api"
+  "https://capstone-msv5.onrender.com/api"
 }
 
 npx expo start --lan -c

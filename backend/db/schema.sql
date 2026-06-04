@@ -78,3 +78,6 @@ CREATE INDEX IF NOT EXISTS idx_events_created_at ON events(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_notifications_created_at ON notifications(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_access_logs_created_at ON access_logs(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_sensors_sensor_name ON sensors(sensor_name);
+
+ALTER TABLE system_state
+ADD COLUMN IF NOT EXISTS esp_last_seen TIMESTAMP;

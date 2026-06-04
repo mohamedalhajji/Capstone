@@ -3,75 +3,56 @@
 Final architecture:
 
 ```text
-Mobile app / web dashboard -> public backend URL -> cloud PostgreSQL
-ESP32 house                -> public backend URL
+Mobile app / web dashboard -> Render backend -> Neon PostgreSQL
+ESP32 house                -> Render backend
 ```
 
 The phone and ESP32 do not need to be on the same network.
 
-The mobile app and web dashboard require a saved user login. The ESP32 uses the
-public `/api/esp/*` endpoints so it can keep polling commands independently.
+## Backend
 
-## 1. Create Cloud PostgreSQL
-
-Use Neon or Render Postgres.
-
-Copy the Postgres connection string. It should look like:
+Render deploys the backend from:
 
 ```text
-postgresql://USER:PASSWORD@HOST/DATABASE?sslmode=require
+C:\Users\moham\سطح المكتب\Capstone\render.yaml
 ```
 
-## 2. Deploy Backend
-
-Use Render Blueprint from the repository root:
+Required Render environment variable:
 
 ```text
-render.yaml
-```
-
-Set this environment variable in Render:
-
-```text
-DATABASE_URL=<your cloud postgres connection string>
+DATABASE_URL=<Neon PostgreSQL connection string>
 ```
 
 Render also generates `JWT_SECRET` from `render.yaml`.
 
-Render will run:
+The deployed backend currently is:
 
 ```text
-npm install
-npm run db:init
-npm start
+https://capstone-msv5.onrender.com
 ```
 
-## 3. Set The Production API URL
+## Apply Production URL
 
-When Render gives the backend URL, run:
+If the backend URL changes, run:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File "C:\Users\moham\سطح المكتب\Capstone\scripts\set-production-api.ps1" -ApiUrl "https://YOUR-BACKEND.onrender.com"
 ```
 
-This updates:
+This updates the Expo environment, EAS profiles, mobile fallback URL, frontend
+production URL, and ESP32 integrated firmware URL.
 
-- Expo `.env`
-- Expo `eas.json`
-- mobile API client fallback
-- ESP32 integrated firmware `API_BASE_URL`
+## Upload Firmware
 
-## 4. Upload Firmware
-
-Upload:
+Upload this sketch to the ESP32:
 
 ```text
 C:\Users\moham\سطح المكتب\Capstone\firmware\home_security_esp32_integrated\home_security_esp32_integrated.ino
 ```
 
-The ESP32 only needs normal internet Wi-Fi after this.
+After upload, the ESP32 only needs normal internet Wi-Fi.
 
-## 5. Build App
+## Build App
 
 ```powershell
 cd "C:\Users\moham\سطح المكتب\Capstone\home-security-mobile"
@@ -79,4 +60,20 @@ $env:EAS_NO_VCS="1"
 npx.cmd eas build --platform android --profile preview
 ```
 
-Do not build the final app until the production API URL is confirmed and applied.
+Do not build the final app until the production API URL and firmware upload are both confirmed.
+
+## Reset Demo Database
+
+Before a final demo, reset old accounts and activity data with:
+
+```powershell
+cd "C:\Users\moham\سطح المكتب\Capstone\backend"
+npm run db:reset
+```
+
+That command resets whichever database is in the current environment. For Neon,
+run the SQL in:
+
+```text
+C:\Users\moham\سطح المكتب\Capstone\backend\db\reset-demo-db.sql
+```
