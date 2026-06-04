@@ -32,11 +32,15 @@ const char* SENSOR_DOOR = "door_main";
 const char* SENSOR_VIBRATION = "vibration_window";
 
 const unsigned long REPORT_COOLDOWN_MS = 5000;
-const unsigned long COMMAND_POLL_INTERVAL_MS = 1500;
+const unsigned long COMMAND_POLL_INTERVAL_MS = 5000;
 const unsigned long WIFI_CONNECT_TIMEOUT_MS = 60000;
 const unsigned long WIFI_SCAN_CACHE_MS = 60000;
-const uint16_t HTTP_CONNECT_TIMEOUT_MS = 1500;
-const uint16_t HTTP_READ_TIMEOUT_MS = 1500;
+const unsigned long WIFI_LOST_TO_SETUP_MS = 30000;
+const unsigned long API_FLUSH_INTERVAL_MS = 250;
+const unsigned long API_FAILURE_BACKOFF_MS = 5000;
+const int MAX_PENDING_API_REQUESTS = 12;
+const uint16_t HTTP_CONNECT_TIMEOUT_MS = 700;
+const uint16_t HTTP_READ_TIMEOUT_MS = 700;
 
 unsigned long lastMotionReportTime = 0;
 unsigned long lastGasReportTime = 0;
@@ -45,7 +49,19 @@ unsigned long lastDoorReportTime = 0;
 unsigned long lastVibrationReportTime = 0;
 unsigned long lastCommandPollTime = 0;
 unsigned long lastWifiScanTime = 0;
+unsigned long wifiDisconnectedSince = 0;
+unsigned long lastApiFlushTime = 0;
+unsigned long lastApiFailureTime = 0;
 int consecutiveApiFailures = 0;
+
+struct PendingApiRequest {
+  String path;
+  String body;
+};
+
+PendingApiRequest pendingApiRequests[MAX_PENDING_API_REQUESTS];
+int pendingApiHead = 0;
+int pendingApiCount = 0;
 
 WebServer server(80);
 Preferences preferences;
@@ -190,13 +206,8 @@ void broadcastAlert(String message) {
 void reconnectSavedWifiAfterApiFailures() {
   if (saved_ssid.length() == 0 || isConfigModeActive) return;
 
-  Serial.println("\n[WIFI]: Reconnecting after repeated API failures...");
+  Serial.println("\n[API]: Backend still failing. Keeping Wi-Fi connected; will retry commands.");
   ignoredRecentResetWifiCommand = false;
-  WiFi.disconnect(false, false);
-  delay(300);
-  WiFi.mode(WIFI_STA);
-  WiFi.setSleep(false);
-  WiFi.begin(saved_ssid.c_str(), saved_password.c_str());
   lastCommandPollTime = millis();
 }
 
@@ -206,6 +217,7 @@ void noteApiSuccess() {
 
 void noteApiFailure(String label, int code, HTTPClient& http) {
   consecutiveApiFailures++;
+  lastApiFailureTime = millis();
   if (consecutiveApiFailures == 1 || consecutiveApiFailures >= 3) {
     Serial.printf("\n[API] %s -> %d (failure %d)\n", label.c_str(), code, consecutiveApiFailures);
     if (code < 0) Serial.println(http.errorToString(code));
@@ -253,6 +265,37 @@ bool postJson(String path, String body) {
   return false;
 }
 
+bool enqueuePostJson(String path, String body) {
+  if (WiFi.status() != WL_CONNECTED || isConfigModeActive) return false;
+
+  int insertIndex;
+  if (pendingApiCount >= MAX_PENDING_API_REQUESTS) {
+    insertIndex = pendingApiHead;
+    pendingApiHead = (pendingApiHead + 1) % MAX_PENDING_API_REQUESTS;
+    pendingApiCount--;
+    Serial.println("\n[API]: Queue full. Dropping oldest telemetry update.");
+  } else {
+    insertIndex = (pendingApiHead + pendingApiCount) % MAX_PENDING_API_REQUESTS;
+  }
+
+  pendingApiRequests[insertIndex].path = path;
+  pendingApiRequests[insertIndex].body = body;
+  pendingApiCount++;
+  return true;
+}
+
+void processPendingApiRequests() {
+  if (pendingApiCount == 0 || WiFi.status() != WL_CONNECTED || isConfigModeActive) return;
+  if (millis() - lastApiFlushTime < API_FLUSH_INTERVAL_MS) return;
+  if (consecutiveApiFailures >= 3 && millis() - lastApiFailureTime < API_FAILURE_BACKOFF_MS) return;
+
+  lastApiFlushTime = millis();
+  PendingApiRequest request = pendingApiRequests[pendingApiHead];
+  pendingApiHead = (pendingApiHead + 1) % MAX_PENDING_API_REQUESTS;
+  pendingApiCount--;
+  postJson(request.path, request.body);
+}
+
 unsigned long* reportTimerForSensor(const char* sensorName) {
   if (strcmp(sensorName, SENSOR_MOTION) == 0) return &lastMotionReportTime;
   if (strcmp(sensorName, SENSOR_GAS) == 0) return &lastGasReportTime;
@@ -269,7 +312,7 @@ void reportSensorEvent(const char* sensorName) {
 
   *lastReportTime = millis();
   String body = String("{\"sensor_name\":\"") + sensorName + "\"}";
-  postJson("/esp/sensor-event", body);
+  enqueuePostJson("/esp/sensor-event", body);
 }
 
 void reportNfcAccess(bool authorized) {
@@ -287,12 +330,12 @@ void reportNfcAccess(bool authorized) {
                 (authorized ? "Authorized User" : "Unknown User") +
                 "\"}";
 
-  postJson("/esp/nfc-access", body);
+  enqueuePostJson("/esp/nfc-access", body);
 }
 
 void reportSystemMode(String mode) {
   String body = String("{\"mode\":\"") + mode + "\"}";
-  postJson("/system-mode", body);
+  enqueuePostJson("/system-mode", body);
 }
 
 void reportEspState(String mode, bool doorLocked) {
@@ -302,7 +345,7 @@ void reportEspState(String mode, bool doorLocked) {
                 ",\"sprinkler_on\":" + ((pump1State || pump2State || pump3State) ? "true" : "false") +
                 "}";
 
-  postJson("/esp/system-state", body);
+  enqueuePostJson("/esp/system-state", body);
 }
 
 void clearActiveOutputs() {
@@ -324,6 +367,8 @@ void clearActiveOutputs() {
 void pollBackendCommands() {
   if (WiFi.status() != WL_CONNECTED || isConfigModeActive) return;
   if (millis() - lastCommandPollTime < COMMAND_POLL_INTERVAL_MS) return;
+  if (pendingApiCount > 0) return;
+  if (consecutiveApiFailures >= 3 && millis() - lastApiFailureTime < API_FAILURE_BACKOFF_MS) return;
 
   lastCommandPollTime = millis();
 
@@ -877,6 +922,7 @@ void setup() {
     
     if (WiFi.status() == WL_CONNECTED) {
       wifiConnected = true;
+      wifiDisconnectedSince = 0;
       wifiConnectSuccessTime = millis(); 
       if (bleActive) stopBLEHardware();
       server.on("/", handleRoot); server.on("/action", handleWebCommand);
@@ -902,6 +948,7 @@ void loop() {
 
   if (WiFi.status() == WL_CONNECTED) {
     wifiConnected = true;
+    wifiDisconnectedSince = 0;
     if (bleActive && !deviceConnected) {
       stopBLEHardware();
     }
@@ -922,16 +969,24 @@ void loop() {
   } else {
     wifiConnected = false;
     if (!isConfigModeActive) {
-      startEmergencySystems();
+      if (wifiDisconnectedSince == 0) {
+        wifiDisconnectedSince = millis();
+        Serial.println("\n[WIFI]: Connection lost. Waiting before setup fallback...");
+      } else if (millis() - wifiDisconnectedSince >= WIFI_LOST_TO_SETUP_MS) {
+        Serial.println("\n[WIFI]: Still disconnected. Starting setup fallback.");
+        startEmergencySystems();
+      }
     }
   }
-
-  pollBackendCommands();
 
   if (Serial.available() > 0) { String command = Serial.readStringUntil('\n'); processCommand(command); }
   if (bleActive && bleIncomingCommand.length() > 0) { processCommand(bleIncomingCommand); bleIncomingCommand = ""; }
 
-  if (!systemActive) return;
+  if (!systemActive) {
+    processPendingApiRequests();
+    pollBackendCommands();
+    return;
+  }
 
   // ðŸ›¡ï¸ [Sensor Matrix Engine Loops]
   if (millis() - lastNFCCheckTime >= 1000) { lastNFCCheckTime = millis(); rfid.PCD_Init(); rfid.PCD_SetAntennaGain(rfid.RxGain_max); rfid.PCD_AntennaOn(); }
@@ -1066,6 +1121,9 @@ void loop() {
   }
 
   digitalWrite(PUMP_1_PIN, pump1State ? RELAY_ON : RELAY_OFF); digitalWrite(PUMP_2_PIN, pump2State ? RELAY_ON : RELAY_OFF); digitalWrite(PUMP_3_PIN, pump3State ? RELAY_ON : RELAY_OFF);
+
+  processPendingApiRequests();
+  pollBackendCommands();
 
   // ðŸŽ¯ NEW FEATURE: Dynamic Continuous Alerts Generation Module (Every 2 seconds loop)
   String temporaryThreatBuffer = "";

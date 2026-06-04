@@ -100,6 +100,10 @@ function isDbUnavailable(error) {
   return error?.code === "ECONNREFUSED" || error?.code === "ENOTFOUND";
 }
 
+function isMissingColumn(error, columnName) {
+  return error?.code === "42703" && String(error.message || "").includes(columnName);
+}
+
 function touchMemoryState() {
   memoryState.updated_at = new Date().toISOString();
 }
@@ -1013,14 +1017,26 @@ app.get("/api/esp/commands", async (req, res) => {
     let state;
 
     try {
-      const result = await pool.query(
-        `UPDATE system_state
-         SET esp_last_seen = CURRENT_TIMESTAMP,
-             updated_at = CURRENT_TIMESTAMP
-         WHERE id = 1
-         RETURNING *`
-      );
-      state = result.rows[0];
+      try {
+        const result = await pool.query(
+          `UPDATE system_state
+           SET esp_last_seen = CURRENT_TIMESTAMP,
+               updated_at = CURRENT_TIMESTAMP
+           WHERE id = 1
+           RETURNING *`
+        );
+        state = result.rows[0];
+      } catch (error) {
+        if (!isMissingColumn(error, "esp_last_seen")) throw error;
+
+        const result = await pool.query(
+          `UPDATE system_state
+           SET updated_at = CURRENT_TIMESTAMP
+           WHERE id = 1
+           RETURNING *`
+        );
+        state = result.rows[0];
+      }
     } catch (error) {
       if (!isDbUnavailable(error)) throw error;
       memoryState.esp_last_seen = new Date().toISOString();

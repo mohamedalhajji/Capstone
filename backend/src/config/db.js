@@ -1,7 +1,11 @@
 const { Pool } = require("pg");
 require("dotenv").config();
 
-const databaseUrl = process.env.DATABASE_URL;
+const rawDatabaseUrl = process.env.DATABASE_URL;
+const databaseUrl =
+  rawDatabaseUrl && !rawDatabaseUrl.includes("your_neon_connection_string_here")
+    ? rawDatabaseUrl
+    : "";
 
 const pool = databaseUrl
   ? new Pool({
