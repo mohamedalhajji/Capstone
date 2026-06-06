@@ -1,14 +1,24 @@
 import React from 'react';
-import { Alert, ScrollView, Text, View } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Alert, Modal, Pressable, ScrollView, Text, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
+import { useNavigation } from '@react-navigation/native';
 import { useSystemState } from '../hooks/useSystemState';
 import { useEvents } from '../hooks/useEvents';
-import { useBackendHealth } from '../hooks/useBackendHealth';
+import { useSensors } from '../hooks/useSensors';
+import { useHouseMap } from '../hooks/useHouseMap';
+import { useSensorAliases } from '../hooks/useSensorAliases';
+import { useAuth } from '../auth/AuthContext';
 import { SystemMode } from '../types/system';
 import { EventItem } from '../types/event';
-import { Card, CommandButton, IconMetric, ScreenState, SectionHeader, StatusBadge } from '../ui/components';
+import { ScreenState } from '../ui/components';
 import { FadeInView } from '../ui/FadeInView';
 import { colors, spacing } from '../ui/theme';
+import { HouseMapEditor, HouseMapPreview } from '../components/HouseMap';
+import { MainTabParamList } from '../navigation/MainTabs';
+
+const WIFI_PROMPT_KEY = 'system-wifi-prompt-seen-v1';
 
 function getEmergencyStatus(events: EventItem[] = []) {
     const criticalEvent = events.find((event) => event.severity === 'critical');
@@ -22,9 +32,18 @@ function getEmergencyStatus(events: EventItem[] = []) {
         };
     }
 
-    const warningEvent = events.find((event) =>
-        ['high', 'warning'].includes(event.severity)
-    );
+    const highEvent = events.find((event) => event.severity === 'high');
+
+    if (highEvent) {
+        return {
+            label: 'Security Alert',
+            icon: 'shield-alert-outline' as const,
+            color: colors.critical,
+            message: highEvent.message,
+        };
+    }
+
+    const warningEvent = events.find((event) => event.severity === 'warning');
 
     if (warningEvent) {
         return {
@@ -50,6 +69,10 @@ function modeIcon(mode: SystemMode) {
 }
 
 export default function DashboardScreen() {
+    const navigation = useNavigation<BottomTabNavigationProp<MainTabParamList, 'Dashboard'>>();
+    const [mapEditorOpen, setMapEditorOpen] = React.useState(false);
+    const [wifiPromptOpen, setWifiPromptOpen] = React.useState(false);
+    const { user } = useAuth();
     const {
         data: systemState,
         isLoading,
@@ -58,9 +81,34 @@ export default function DashboardScreen() {
         settingMode,
         fullReset,
         fullResetting,
+        requestEspWifiReset,
     } = useSystemState();
     const { data: events } = useEvents();
-    const { data: health, isError: healthError, isFetching: checkingHealth } = useBackendHealth();
+    const { data: sensors } = useSensors();
+    const { layout: houseMap, setLayout: setHouseMap } = useHouseMap(user?.id);
+    const { aliases } = useSensorAliases(user?.id);
+    const espLastSeenMs = systemState?.espLastSeen ? new Date(systemState.espLastSeen).getTime() : 0;
+    const systemOnline = espLastSeenMs > 0 && Date.now() - espLastSeenMs < 15000;
+
+    React.useEffect(() => {
+        let active = true;
+
+        AsyncStorage.getItem(WIFI_PROMPT_KEY)
+            .then((seen) => {
+                if (active && systemState && (!seen || !systemOnline)) {
+                    setWifiPromptOpen(true);
+                }
+            })
+            .catch(() => {
+                if (active && systemState && !systemOnline) {
+                    setWifiPromptOpen(true);
+                }
+            });
+
+        return () => {
+            active = false;
+        };
+    }, [systemOnline, systemState]);
 
     if (isLoading) {
         return <ScreenState title="Loading system" message="Getting the latest home security state." loading />;
@@ -75,15 +123,38 @@ export default function DashboardScreen() {
         );
     }
 
-    const recentEvents = events?.slice(0, 3) ?? [];
     const emergencyStatus = getEmergencyStatus(events?.slice(0, 10) ?? []);
-    const connected = !!health?.ok && !healthError;
-    const espLastSeenMs = systemState.espLastSeen ? new Date(systemState.espLastSeen).getTime() : 0;
-    const houseOnline = espLastSeenMs > 0 && Date.now() - espLastSeenMs < 15000;
+    const isNormal = emergencyStatus.label === 'Normal';
+    const sensorsWithAliases = (sensors ?? []).map((sensor) => ({ ...sensor, label: aliases[sensor.id] || sensor.label }));
+    const activeSensors = sensorsWithAliases.filter((sensor) => sensor.status !== 'idle' && sensor.status !== 'safe');
+    const dismissWifiPrompt = () => {
+        setWifiPromptOpen(false);
+        AsyncStorage.setItem(WIFI_PROMPT_KEY, 'true').catch(() => undefined);
+    };
+    const openRequiredWifiSetup = () => {
+        requestEspWifiReset()
+            .catch(() => undefined)
+            .finally(() => {
+                setWifiPromptOpen(false);
+                navigation.navigate('Settings', { openWifiSetup: true, requireWifiSetup: true });
+            });
+    };
     const changeMode = (mode: SystemMode) => {
         setMode(mode).catch((error) => {
             Alert.alert('Mode change failed', error instanceof Error ? error.message : 'Unknown error');
         });
+    };
+
+    const toggleLock = () => {
+        if (systemState.mode === 'away') {
+            Alert.alert('Unlock system?', 'This will disarm the system.', [
+                { text: 'Cancel', style: 'cancel' },
+                { text: 'Disarm', style: 'destructive', onPress: () => changeMode('disarmed') },
+            ]);
+            return;
+        }
+
+        changeMode('away');
     };
 
     const confirmClearData = () => {
@@ -107,122 +178,228 @@ export default function DashboardScreen() {
 
     return (
         <FadeInView>
-        <ScrollView contentContainerStyle={{ padding: spacing.page, gap: spacing.gap, backgroundColor: colors.background }}>
-            <Card accentColor={emergencyStatus.color}>
-                <View style={{ flexDirection: 'row', gap: 14, alignItems: 'center' }}>
-                    <View
-                        style={{
-                            width: 52,
-                            height: 52,
-                            borderRadius: 14,
-                            backgroundColor: `${emergencyStatus.color}22`,
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                        }}
-                    >
-                        <MaterialCommunityIcons name={emergencyStatus.icon} size={30} color={emergencyStatus.color} />
-                    </View>
-                    <View style={{ flex: 1, gap: 6 }}>
-                        <StatusBadge label={emergencyStatus.label.toUpperCase()} color={emergencyStatus.color} />
-                        <Text style={{ color: colors.text, fontSize: 16, fontWeight: '800' }}>
-                            {emergencyStatus.message}
-                        </Text>
-                    </View>
+        <ScrollView contentContainerStyle={{ padding: spacing.page, paddingTop: 64, gap: 14, backgroundColor: colors.background }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <View>
+                    <Text style={{ color: colors.text, fontSize: 34, fontWeight: '900' }}>Home</Text>
+                    <Text style={{ color: colors.muted, fontSize: 17, marginTop: 2 }}>
+                        {isNormal ? 'Your home is secure.' : 'Your home needs attention.'}
+                    </Text>
                 </View>
-            </Card>
-
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
-                <IconMetric
-                    icon={modeIcon(systemState.mode)}
-                    label="Mode"
-                    value={systemState.mode.toUpperCase()}
-                    color={colors.primary}
-                />
-                <IconMetric
-                    icon={connected ? 'cloud-check-outline' : 'cloud-alert-outline'}
-                    label="Backend"
-                    value={connected ? 'ONLINE' : checkingHealth ? 'CHECKING' : 'OFFLINE'}
-                    color={connected ? colors.success : colors.danger}
-                />
-                <IconMetric
-                    icon={houseOnline ? 'home-outline' : 'alert-circle-outline'}
-                    label="House"
-                    value={houseOnline ? 'ONLINE' : 'OFFLINE'}
-                    color={houseOnline ? colors.success : colors.warning}
-                />
-                <IconMetric
-                    icon={systemState.actuators.doorLocked ? 'lock-outline' : 'lock-open-outline'}
-                    label="Door"
-                    value={systemState.actuators.doorLocked ? 'LOCKED' : 'OPEN'}
-                    color={systemState.actuators.doorLocked ? colors.success : colors.warning}
-                />
-                <IconMetric
-                    icon={systemState.actuators.sprinklerOn ? 'sprinkler-fire' : 'sprinkler'}
-                    label="Sprinkler"
-                    value={systemState.actuators.sprinklerOn ? 'ACTIVE' : 'OFF'}
-                    color={systemState.actuators.sprinklerOn ? colors.critical : colors.muted}
-                />
+                <Pressable
+                    onPress={toggleLock}
+                    style={{
+                        width: 52,
+                        height: 52,
+                        borderRadius: 26,
+                        borderWidth: 1,
+                        borderColor: systemState.mode === 'away' ? colors.success : colors.border,
+                        backgroundColor: systemState.mode === 'away' ? `${colors.success}18` : '#071B34',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                    }}
+                >
+                    <MaterialCommunityIcons name={systemState.mode === 'away' ? 'lock' : 'lock-open-outline'} size={25} color={systemState.mode === 'away' ? colors.success : colors.text} />
+                </Pressable>
             </View>
 
-            <Card>
-                <SectionHeader icon="shield-home-outline" title="Arm System" />
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
-                    <CommandButton
-                        label="Disarm"
-                        icon="shield-off-outline"
-                        disabled={settingMode}
-                        tone={systemState.mode === 'disarmed' ? 'primary' : 'default'}
-                        onPress={() => changeMode('disarmed')}
-                    />
-                    <CommandButton
-                        label="Home"
-                        icon="home-lock"
-                        disabled={settingMode}
-                        tone={systemState.mode === 'home' ? 'primary' : 'default'}
-                        onPress={() => changeMode('home')}
-                    />
-                    <CommandButton
-                        label="Away"
-                        icon="shield-lock-outline"
-                        disabled={settingMode}
-                        tone={systemState.mode === 'away' ? 'primary' : 'default'}
-                        onPress={() => changeMode('away')}
-                    />
+            <View
+                style={{
+                    minHeight: 98,
+                    borderRadius: 10,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                    backgroundColor: '#071B34',
+                    padding: 14,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 14,
+                }}
+            >
+                <View
+                    style={{
+                        width: 68,
+                        height: 68,
+                        borderRadius: 34,
+                        borderWidth: 4,
+                        borderColor: emergencyStatus.color,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        backgroundColor: `${emergencyStatus.color}18`,
+                    }}
+                >
+                    <MaterialCommunityIcons name={emergencyStatus.icon} size={34} color={emergencyStatus.color} />
                 </View>
-            </Card>
+                <View style={{ flex: 1, gap: 6 }}>
+                    <View
+                        style={{
+                            alignSelf: 'flex-start',
+                            borderRadius: 999,
+                            borderWidth: 1,
+                            borderColor: emergencyStatus.color,
+                            backgroundColor: `${emergencyStatus.color}1F`,
+                            paddingHorizontal: 10,
+                            paddingVertical: 4,
+                        }}
+                    >
+                        <Text style={{ color: emergencyStatus.color, fontWeight: '900', fontSize: 12 }}>{emergencyStatus.label.toUpperCase()}</Text>
+                    </View>
+                    <Text style={{ color: colors.text, fontSize: 18, fontWeight: '900' }}>
+                        {isNormal ? 'No recent alerts' : emergencyStatus.label}
+                    </Text>
+                    <Text numberOfLines={1} style={{ color: colors.muted, fontSize: 14 }}>
+                        {isNormal ? 'The system is monitoring normally.' : emergencyStatus.message}
+                    </Text>
+                </View>
+            </View>
 
-            <Card>
-                <SectionHeader icon="restore" title="Clear Data" />
-                <CommandButton
-                    label="Clear and Reset"
-                    icon="delete-sweep-outline"
-                    tone="danger"
-                    disabled={fullResetting}
-                    onPress={confirmClearData}
-                />
-            </Card>
+            <View style={{ gap: 8 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <Text style={{ color: colors.text, fontSize: 21, fontWeight: '900' }}>House Overview</Text>
+                </View>
 
-            <Card>
-                <SectionHeader icon="timeline-clock-outline" title="Recent Events" />
-                {recentEvents.length === 0 ? (
-                    <Text style={{ color: colors.muted }}>No events recorded yet.</Text>
-                ) : (
-                    recentEvents.map((event) => (
-                        <View key={event.id} style={{ flexDirection: 'row', gap: 10, alignItems: 'flex-start' }}>
-                            <MaterialCommunityIcons
-                                name={event.severity === 'critical' ? 'alert-octagon-outline' : 'alert-circle-outline'}
-                                size={22}
-                                color={event.severity === 'critical' ? colors.critical : colors.warning}
-                            />
-                            <View style={{ flex: 1 }}>
-                                <Text style={{ color: colors.text, fontWeight: '800' }}>{event.title}</Text>
-                                <Text style={{ color: colors.muted, marginTop: 2 }}>{event.message}</Text>
+                {houseMap.rooms.length > 0 ? (
+                    <HouseMapPreview
+                        layout={houseMap}
+                        sensors={sensorsWithAliases}
+                    />
+                ) : sensorsWithAliases.length > 0 ? (
+                    <View style={{ borderRadius: 10, borderWidth: 1, borderColor: colors.border, backgroundColor: '#071B34', padding: 12, gap: 8 }}>
+                        {(activeSensors.length > 0 ? activeSensors : sensorsWithAliases.slice(0, 4)).map((sensor) => (
+                            <View key={sensor.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 40 }}>
+                                <MaterialCommunityIcons name="radar" size={20} color={sensor.status === 'critical' || sensor.status === 'triggered' ? colors.critical : colors.primary} />
+                                <View style={{ flex: 1 }}>
+                                    <Text style={{ color: colors.text, fontWeight: '900' }}>{sensor.label}</Text>
+                                    <Text style={{ color: colors.muted, fontSize: 12 }}>{sensor.location} - {sensor.status}</Text>
+                                </View>
                             </View>
+                        ))}
+                    </View>
+                ) : houseMap.promptState === 'unseen' ? (
+                    <View
+                        style={{
+                            borderRadius: 10,
+                            borderWidth: 1,
+                            borderColor: colors.border,
+                            backgroundColor: '#071B34',
+                            padding: 16,
+                            gap: 12,
+                        }}
+                    >
+                        <Text style={{ color: colors.text, fontSize: 18, fontWeight: '900' }}>Create a home map?</Text>
+                        <Text style={{ color: colors.muted, lineHeight: 20 }}>Build a simple room grid so alerts point to the right place.</Text>
+                        <View style={{ flexDirection: 'row', gap: 10 }}>
+                            <ModeButton
+                                label="Set Up"
+                                icon="plus-box-outline"
+                                active
+                                onPress={() => {
+                                    setHouseMap({ ...houseMap, promptState: 'accepted' }).then(() => setMapEditorOpen(true));
+                                }}
+                            />
+                            <ModeButton
+                                label="Later"
+                                icon="clock-outline"
+                                active={false}
+                                onPress={() => {
+                                    setHouseMap({ ...houseMap, promptState: 'declined' }).catch((error) => {
+                                        Alert.alert('Could not save choice', error instanceof Error ? error.message : 'Unknown error');
+                                    });
+                                }}
+                            />
                         </View>
-                    ))
+                    </View>
+                ) : (
+                    <View style={{ borderRadius: 10, borderWidth: 1, borderColor: colors.border, backgroundColor: '#071B34', padding: 16 }}>
+                        <Text style={{ color: colors.muted, textAlign: 'center', fontWeight: '800' }}>Please add sensors.</Text>
+                    </View>
                 )}
-            </Card>
+            </View>
+
+            <HouseMapEditor
+                visible={mapEditorOpen}
+                layout={houseMap}
+                sensors={sensors}
+                onChange={(nextLayout) => {
+                    setHouseMap(nextLayout).catch((error) => {
+                        Alert.alert('Could not save map', error instanceof Error ? error.message : 'Unknown error');
+                    });
+                }}
+                onClose={() => setMapEditorOpen(false)}
+            />
+            <Modal visible={wifiPromptOpen} animationType="fade">
+                <View style={{ flex: 1, backgroundColor: colors.background, justifyContent: 'center', padding: spacing.page }}>
+                    <Pressable
+                        onPress={dismissWifiPrompt}
+                        style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 36 }}
+                    />
+                    <View
+                        style={{
+                            backgroundColor: '#071B34',
+                            borderRadius: 10,
+                            borderWidth: 1,
+                            borderColor: colors.border,
+                            padding: 18,
+                            gap: 12,
+                        }}
+                    >
+                        <Text style={{ color: colors.text, fontSize: 26, fontWeight: '900' }}>System Wi-Fi setup</Text>
+                        <Text style={{ color: colors.muted, lineHeight: 20 }}>
+                            Connect the system to Wi-Fi before using the app. This appears on first launch or when the system is offline.
+                        </Text>
+                        <Pressable
+                            onPress={openRequiredWifiSetup}
+                            style={{
+                                minHeight: 48,
+                                borderRadius: 8,
+                                backgroundColor: colors.primary,
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                            }}
+                        >
+                            <Text style={{ color: colors.background, fontWeight: '900' }}>Set Up System Wi-Fi</Text>
+                        </Pressable>
+                    </View>
+                </View>
+            </Modal>
         </ScrollView>
         </FadeInView>
+    );
+}
+
+function ModeButton({
+    label,
+    icon,
+    active,
+    disabled,
+    onPress,
+}: {
+    label: string;
+    icon: keyof typeof MaterialCommunityIcons.glyphMap;
+    active: boolean;
+    disabled?: boolean;
+    onPress: () => void;
+}) {
+    return (
+        <Pressable
+            disabled={disabled}
+            onPress={onPress}
+            style={{
+                flex: 1,
+                minHeight: 58,
+                borderRadius: 8,
+                borderWidth: active ? 2 : 1,
+                borderColor: active ? colors.success : colors.border,
+                backgroundColor: active ? `${colors.success}18` : '#071B34',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexDirection: 'row',
+                gap: 8,
+                opacity: disabled ? 0.55 : 1,
+            }}
+        >
+            <MaterialCommunityIcons name={icon} size={22} color={active ? colors.text : colors.text} />
+            <Text style={{ color: colors.text, fontSize: 15, fontWeight: '900' }}>{label}</Text>
+        </Pressable>
     );
 }

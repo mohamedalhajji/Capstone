@@ -492,6 +492,10 @@ async function processNfcAccess({ authorized, nfc_uid, user_name }) {
       newMode = "home";
       modeChangeMessage = "system switched from away to home";
     }
+    const modeChanged = previousMode !== newMode;
+    const authorizedAccessMessage = modeChanged
+      ? `Authorized NFC access granted (${previousMode} -> ${newMode})`
+      : "Authorized NFC access granted";
 
     memoryState.door_locked = false;
     memoryState.buzzer_on = false;
@@ -509,7 +513,7 @@ async function processNfcAccess({ authorized, nfc_uid, user_name }) {
       id: memoryEventId++,
       event_type: "authorized_access",
       severity: "low",
-      message: `Authorized NFC access granted (${previousMode} -> ${newMode})`,
+      message: authorizedAccessMessage,
       action_taken: `door unlocked, ${modeChangeMessage}`,
       created_at: new Date().toISOString(),
     });
@@ -543,7 +547,7 @@ async function processNfcAccess({ authorized, nfc_uid, user_name }) {
         [
           "authorized_access",
           "low",
-          `Authorized NFC access granted (${previousMode} -> ${newMode})`,
+          authorizedAccessMessage,
           `door unlocked, ${modeChangeMessage}`,
         ]
       );

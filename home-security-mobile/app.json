@@ -17,6 +17,7 @@
       "bundleIdentifier": "com.capstone.homesecurity",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
+        "NSFaceIDUsageDescription": "Use Face ID to unlock Home Security.",
         "NSAppTransportSecurity": {
           "NSAllowsArbitraryLoads": true,
           "NSAllowsArbitraryLoadsInWebContent": true
@@ -42,6 +43,12 @@
     },
     "plugins": [
       "expo-font",
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Use Face ID to unlock Home Security."
+        }
+      ],
       [
         "expo-build-properties",
         {

@@ -14,7 +14,7 @@
 #define RELAY_OFF HIGH
 
 // --- Emergency Provisioning Web Settings ---
-const char* ap_ssid = "ESP32_Config_Safe";       
+const char* ap_ssid = "Home Security System";       
 const char* ap_password = "";                    
 const String SYSTEM_ADMIN_PASSWORD = "12345678"; 
 

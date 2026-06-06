@@ -5,6 +5,8 @@ import { useAccessLogs } from '../hooks/useAccessLogs';
 import { useEvents } from '../hooks/useEvents';
 import { useSensors } from '../hooks/useSensors';
 import { useSystemState } from '../hooks/useSystemState';
+import { useAuth } from '../auth/AuthContext';
+import { useSensorAliases } from '../hooks/useSensorAliases';
 import { AccessLogItem } from '../types/accessLog';
 import { EventItem } from '../types/event';
 import { SensorItem } from '../types/sensor';
@@ -18,7 +20,7 @@ const severityColors: Record<EventItem['severity'], string> = {
     info: colors.primary,
     low: colors.primary,
     warning: colors.warning,
-    high: colors.warning,
+    high: colors.critical,
     critical: colors.critical,
 };
 
@@ -79,9 +81,22 @@ function RowIcon({
     );
 }
 
+function formatDateTime(value: string) {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return value;
+
+    return date.toLocaleString([], {
+        month: 'short',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+    });
+}
+
 function SensorRow({ sensor }: { sensor: SensorItem }) {
     const color = statusColors[sensor.status] ?? colors.muted;
-    const hasValue = sensor.value !== undefined && sensor.value !== null;
+    const isTriggered = sensor.status === 'triggered' || sensor.status === 'warning' || sensor.status === 'critical';
+    const hasTriggerRecord = isTriggered || sensor.value !== undefined;
 
     return (
         <Card accentColor={sensor.status === 'triggered' || sensor.status === 'critical' ? color : undefined}>
@@ -93,7 +108,7 @@ function SensorRow({ sensor }: { sensor: SensorItem }) {
                 </View>
                 <StatusBadge label={sensor.status.toUpperCase()} color={color} />
             </View>
-            {hasValue && <Text style={{ color: colors.muted }}>Last value: {String(sensor.value)}</Text>}
+            {hasTriggerRecord && <Text style={{ color: colors.muted }}>Triggered: {formatDateTime(sensor.lastUpdated)}</Text>}
         </Card>
     );
 }
@@ -113,7 +128,7 @@ function EventRow({ event }: { event: EventItem }) {
                         <StatusBadge label={event.severity.toUpperCase()} color={color} />
                     </View>
                     <Text style={{ color: colors.muted, lineHeight: 19 }}>{event.message}</Text>
-                    <Text style={{ color: colors.subtle, fontSize: 12 }}>{event.createdAt}</Text>
+                    <Text style={{ color: colors.subtle, fontSize: 12 }}>{formatDateTime(event.createdAt)}</Text>
                 </View>
             </View>
         </Card>
@@ -133,7 +148,7 @@ function AccessRow({ item }: { item: AccessLogItem }) {
                 <View style={{ flex: 1, gap: 4 }}>
                     <Text style={{ color: colors.text, fontSize: 15, fontWeight: '900' }}>{item.userName}</Text>
                     <Text style={{ color: colors.muted }}>UID: {item.nfcUid}</Text>
-                    <Text style={{ color: colors.subtle, fontSize: 12 }}>{item.createdAt}</Text>
+                    <Text style={{ color: colors.subtle, fontSize: 12 }}>{formatDateTime(item.createdAt)}</Text>
                 </View>
                 <StatusBadge label={item.result.toUpperCase()} color={color} />
             </View>
@@ -143,7 +158,9 @@ function AccessRow({ item }: { item: AccessLogItem }) {
 
 export default function ActivityScreen() {
     const [mode, setMode] = useState<ActivityMode>('sensors');
+    const { user } = useAuth();
     const sensors = useSensors();
+    const { aliases } = useSensorAliases(user?.id);
     const events = useEvents();
     const accessLogs = useAccessLogs();
     const { resetSensors, resettingSensors } = useSystemState();
@@ -153,8 +170,9 @@ export default function ActivityScreen() {
     const error =
         mode === 'sensors' ? sensors.isError : mode === 'events' ? events.isError : accessLogs.isError;
 
+    const sensorsWithAliases = sensors.data?.map((sensor) => ({ ...sensor, label: aliases[sensor.id] || sensor.label })) ?? [];
     const triggeredCount =
-        sensors.data?.filter((sensor) => sensor.status === 'triggered' || sensor.status === 'critical').length ?? 0;
+        sensorsWithAliases.filter((sensor) => sensor.status === 'triggered' || sensor.status === 'critical').length;
 
     const confirmResetSensors = () => {
         Alert.alert(
@@ -214,7 +232,7 @@ export default function ActivityScreen() {
                                 />
                             </View>
                         </Card>
-                        {sensors.data?.map((sensor) => <SensorRow key={sensor.id} sensor={sensor} />)}
+                        {sensorsWithAliases.map((sensor) => <SensorRow key={sensor.id} sensor={sensor} />)}
                     </>
                 )}
 

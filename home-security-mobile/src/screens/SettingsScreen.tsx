@@ -1,11 +1,21 @@
 import React from 'react';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { ActivityIndicator, Alert, KeyboardAvoidingView, Modal, Platform, Pressable, SafeAreaView, ScrollView, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { RouteProp, useRoute } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../auth/AuthContext';
+import { HouseMapEditor } from '../components/HouseMap';
+import { PinSetupScreen } from './AppLockScreen';
+import { useHouseMap } from '../hooks/useHouseMap';
+import { useSensors } from '../hooks/useSensors';
 import { useSystemState } from '../hooks/useSystemState';
+import { useAppLock } from '../hooks/useAppLock';
+import { useSensorAliases } from '../hooks/useSensorAliases';
+import { useSimulationActions } from '../hooks/useSimulationActions';
 import { Card, CommandButton, SectionHeader, StatusBadge } from '../ui/components';
 import { FadeInView } from '../ui/FadeInView';
 import { colors, spacing } from '../ui/theme';
+import { MainTabParamList } from '../navigation/MainTabs';
 
 type WifiNetwork = {
     ssid: string;
@@ -14,6 +24,14 @@ type WifiNetwork = {
 };
 
 const ESP_SETUP_BASE_URL = 'http://192.168.4.1';
+
+const simulatedSensors = [
+    { label: 'Motion', sensorName: 'motion_living_room', icon: 'motion-sensor' as const },
+    { label: 'Gas', sensorName: 'gas_kitchen', icon: 'smoke-detector-alert-outline' as const, tone: 'danger' as const },
+    { label: 'Flame', sensorName: 'flame_kitchen', icon: 'fire-alert' as const, tone: 'danger' as const },
+    { label: 'Door', sensorName: 'door_main', icon: 'door-open' as const },
+    { label: 'Vibration', sensorName: 'vibration_window', icon: 'vibrate' as const },
+];
 
 async function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutMs = 8000) {
     const controller = new AbortController();
@@ -55,7 +73,14 @@ function parseWifiNetworkText(text: string): WifiNetwork[] {
 }
 
 export default function SettingsScreen() {
+    const route = useRoute<RouteProp<MainTabParamList, 'Settings'>>();
+    const openedWifiParamRef = React.useRef(false);
+    const insets = useSafeAreaInsets();
     const [setupOpen, setSetupOpen] = React.useState(false);
+    const [mapEditorOpen, setMapEditorOpen] = React.useState(false);
+    const [pinSetupOpen, setPinSetupOpen] = React.useState(false);
+    const [renamingSensorId, setRenamingSensorId] = React.useState<string | null>(null);
+    const [sensorName, setSensorName] = React.useState('');
     const [setupStarted, setSetupStarted] = React.useState(false);
     const [ssid, setSsid] = React.useState('');
     const [wifiPassword, setWifiPassword] = React.useState('');
@@ -66,7 +91,15 @@ export default function SettingsScreen() {
     const [manualEntry, setManualEntry] = React.useState(false);
     const [savingWifi, setSavingWifi] = React.useState(false);
     const { user, logout } = useAuth();
-    const { requestEspWifiReset, requestingEspWifiReset } = useSystemState();
+    const { data: systemState, requestEspWifiReset, requestingEspWifiReset, fullReset, fullResetting } = useSystemState();
+    const { data: sensors } = useSensors();
+    const { layout: houseMap, setLayout: setHouseMap } = useHouseMap(user?.id);
+    const { settings: lockSettings, biometricSupported, saveSettings, authenticateBiometric } = useAppLock(user?.id);
+    const { aliases, setAlias } = useSensorAliases(user?.id);
+    const { triggerSensor, simulateNfc, isLoading: simulatingAction } = useSimulationActions();
+    const systemLastSeenMs = systemState?.espLastSeen ? new Date(systemState.espLastSeen).getTime() : 0;
+    const systemWifiConnected = systemLastSeenMs > 0 && Date.now() - systemLastSeenMs < 15000;
+    const requireWifiSetup = !!route.params?.requireWifiSetup;
 
     const fetchNetworks = React.useCallback(async () => {
         setLoadingNetworks(true);
@@ -100,7 +133,7 @@ export default function SettingsScreen() {
                 try {
                     payload = JSON.parse(responseText);
                 } catch {
-                    throw new Error(jsonError?.message || `ESP32 returned unreadable Wi-Fi JSON: ${responseText.slice(0, 120) || 'empty response'}`);
+                    throw new Error(jsonError?.message || `System returned unreadable Wi-Fi JSON: ${responseText.slice(0, 120) || 'empty response'}`);
                 }
 
                 if (!response.ok || payload.success === false || !Array.isArray(payload.networks)) {
@@ -119,16 +152,16 @@ export default function SettingsScreen() {
             if (!ssid && validNetworks[0]?.ssid) {
                 setSsid(validNetworks[0].ssid);
             }
-            setManualEntry(validNetworks.length === 0);
+            setManualEntry(false);
         } catch (error) {
             setNetworks([]);
-            setManualEntry(true);
+            setManualEntry(false);
             const message =
                 error instanceof Error && error.name === 'AbortError'
-                    ? 'Scan timed out. Connect this phone to ESP32_Config_Safe, then tap Refresh.'
+                    ? 'Scan timed out. Connect this phone to Home Security System, then tap Refresh.'
                     : error instanceof Error
-                      ? `${error.message}. Connect this phone to ESP32_Config_Safe, then tap Refresh.`
-                      : 'Connect this phone to ESP32_Config_Safe, then tap Refresh.';
+                      ? `${error.message}. Connect this phone to Home Security System, then tap Refresh.`
+                      : 'Connect this phone to Home Security System, then tap Refresh.';
             setScanError(message);
             setScanStatus(null);
         } finally {
@@ -136,11 +169,24 @@ export default function SettingsScreen() {
         }
     }, [ssid]);
 
+    React.useEffect(() => {
+        if (route.params?.openWifiSetup && !openedWifiParamRef.current) {
+            openedWifiParamRef.current = true;
+            setSetupStarted(true);
+            setSetupOpen(true);
+            setManualEntry(false);
+            setScanError(null);
+            setScanStatus(null);
+            setNetworks([]);
+            fetchNetworks().catch(() => undefined);
+        }
+    }, [fetchNetworks, route.params?.openWifiSetup]);
+
     const saveWifiCredentials = async () => {
         const cleanSsid = ssid.trim();
 
         if (!cleanSsid) {
-            Alert.alert('Wi-Fi name required', 'Enter the network name for the router you want the ESP32 to use.');
+            Alert.alert('Wi-Fi required', 'Choose the Wi-Fi network for the system.');
             return;
         }
 
@@ -175,18 +221,18 @@ export default function SettingsScreen() {
 
             setSetupOpen(false);
             setWifiPassword('');
-            Alert.alert('Wi-Fi saved', payload.message || 'The ESP32 is restarting and will connect to the new network.');
+            Alert.alert('Wi-Fi connected', payload.message || 'The system is restarting and will connect to the new network.');
         } catch (error) {
             const message =
                 error instanceof Error && error.name === 'AbortError'
-                    ? 'Save timed out. Stay connected to ESP32_Config_Safe and try again.'
+                    ? 'Save timed out. Stay connected to Home Security System and try again.'
                     : error instanceof Error
                       ? error.message
-                      : 'Make sure this phone is connected to ESP32_Config_Safe.';
+                      : 'Make sure this phone is connected to Home Security System.';
 
             Alert.alert(
-                'Could not reach ESP32',
-                `${message}\n\nIf your phone says the ESP32 Wi-Fi has no internet, choose Stay Connected.`
+                'Could not reach system',
+                `${message}\n\nIf your phone says the system Wi-Fi has no internet, choose Stay Connected.`
             );
         } finally {
             setSavingWifi(false);
@@ -195,21 +241,21 @@ export default function SettingsScreen() {
 
     const confirmEspWifiReset = () => {
         Alert.alert(
-            'Reconfigure ESP32 Wi-Fi?',
-            'This works only while the ESP32 is online. It will start ESP32_Config_Safe for new Wi-Fi credentials.',
+            'Change system Wi-Fi?',
+            'This works only while the system is online. It will start Home Security System setup for new Wi-Fi credentials.',
             [
                 { text: 'Cancel', style: 'cancel' },
                 {
-                    text: 'Reconfigure',
+                    text: 'Change Wi-Fi',
                     style: 'destructive',
                     onPress: () => {
                         requestEspWifiReset()
                             .then(() => {
                                 setSetupStarted(true);
-                                Alert.alert('Setup mode started', 'Connect your phone to ESP32_Config_Safe, then return here and tap New Wi-Fi.');
+                                Alert.alert('Setup mode started', 'Connect your phone to Home Security System, then return here and tap Change Wi-Fi.');
                             })
                             .catch((error) => {
-                                Alert.alert('ESP Wi-Fi reset failed', error instanceof Error ? error.message : 'Unknown error');
+                                Alert.alert('System Wi-Fi reset failed', error instanceof Error ? error.message : 'Unknown error');
                             });
                     },
                 },
@@ -217,9 +263,126 @@ export default function SettingsScreen() {
         );
     };
 
+    const runDevAction = async (action: () => Promise<unknown>, successMessage: string) => {
+        try {
+            await action();
+            Alert.alert('Done', successMessage);
+        } catch (error) {
+            Alert.alert('Action failed', error instanceof Error ? error.message : 'Unknown error');
+        }
+    };
+
     return (
         <FadeInView>
             <ScrollView contentContainerStyle={{ padding: spacing.page, gap: spacing.gap, backgroundColor: colors.background }}>
+                <Card>
+                    <SectionHeader
+                        icon="floor-plan"
+                        title="Home Map"
+                        subtitle={houseMap.rooms.length > 0 ? 'Edit rooms and linked sensors.' : 'Create the optional blueprint whenever you want.'}
+                    />
+                    <CommandButton
+                        label={houseMap.rooms.length > 0 ? 'Edit Map' : 'Create Map'}
+                        icon="map-marker-path"
+                        tone="primary"
+                        onPress={() => {
+                            setHouseMap({ ...houseMap, promptState: 'accepted' })
+                                .then(() => setMapEditorOpen(true))
+                                .catch((error) => {
+                                    Alert.alert('Could not open map', error instanceof Error ? error.message : 'Unknown error');
+                                });
+                        }}
+                    />
+                    <Text style={{ color: colors.text, fontWeight: '900', marginTop: 4 }}>Sensors</Text>
+                    {sensors && sensors.length > 0 ? (
+                        sensors.map((sensor) => (
+                            <Pressable
+                                key={sensor.id}
+                                onPress={() => {
+                                    setRenamingSensorId(sensor.id);
+                                    setSensorName(aliases[sensor.id] || sensor.label);
+                                }}
+                                style={{ minHeight: 46, flexDirection: 'row', alignItems: 'center', gap: 10 }}
+                            >
+                                <MaterialCommunityIcons name="radar" size={20} color={colors.primary} />
+                                <View style={{ flex: 1 }}>
+                                    <Text style={{ color: colors.text, fontWeight: '900' }}>{aliases[sensor.id] || sensor.label}</Text>
+                                    <Text style={{ color: colors.muted, fontSize: 12 }}>{sensor.location}</Text>
+                                </View>
+                                <MaterialCommunityIcons name="pencil-outline" size={18} color={colors.muted} />
+                            </Pressable>
+                        ))
+                    ) : (
+                        <Text style={{ color: colors.muted }}>No sensors detected yet.</Text>
+                    )}
+                </Card>
+
+                <Card>
+                    <SectionHeader icon="delete-sweep-outline" title="Clear History" subtitle="Clear history and reset the system state." />
+                    <CommandButton
+                        label="Clear and Reset"
+                        icon="delete-outline"
+                        tone="danger"
+                        disabled={fullResetting}
+                        onPress={() =>
+                            Alert.alert('Clear data and reset?', 'This clears history and stops active alerts.', [
+                                { text: 'Cancel', style: 'cancel' },
+                                {
+                                    text: 'Clear',
+                                    style: 'destructive',
+                                    onPress: () => {
+                                        fullReset().catch((error) => {
+                                            Alert.alert('Clear failed', error instanceof Error ? error.message : 'Unknown error');
+                                        });
+                                    },
+                                },
+                            ])
+                        }
+                    />
+                </Card>
+
+                <Card>
+                    <SectionHeader icon="lock-outline" title="App Lock" subtitle="Require biometrics or a 6 digit PIN when opening the app." />
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+                        <CommandButton
+                            label={lockSettings.pin ? 'Change PIN' : 'Use PIN'}
+                            icon="numeric"
+                            tone={lockSettings.method === 'pin' ? 'primary' : 'default'}
+                            onPress={() => setPinSetupOpen(true)}
+                        />
+                        <CommandButton
+                            label="Biometrics"
+                            icon="fingerprint"
+                            tone={lockSettings.method === 'biometric' ? 'primary' : 'default'}
+                            onPress={() => {
+                                if (!biometricSupported) {
+                                    Alert.alert('Biometrics unavailable', 'Face ID or Touch ID is not available or not enrolled on this device.');
+                                    return;
+                                }
+                                authenticateBiometric()
+                                    .then((result) => {
+                                        if (!result.success) {
+                                            Alert.alert(
+                                                'Face ID did not start',
+                                                result.warning || result.error || 'The biometric prompt was canceled or unavailable.'
+                                            );
+                                            return;
+                                        }
+                                        return saveSettings({ ...lockSettings, enabled: true, method: 'biometric' });
+                                    })
+                                    .catch((error) => {
+                                        Alert.alert('Could not enable biometrics', error instanceof Error ? error.message : 'Unknown error');
+                                    });
+                            }}
+                        />
+                    </View>
+                    {!biometricSupported && (
+                        <Text style={{ color: colors.muted, lineHeight: 19 }}>
+                            Biometrics are unavailable on this device, so PIN lock is required.
+                        </Text>
+                    )}
+                </Card>
+
                 <Card>
                     <SectionHeader icon="account-circle-outline" title="Account" />
                     <Text style={{ color: colors.text, fontWeight: '900', fontSize: 16 }}>{user?.name}</Text>
@@ -229,22 +392,65 @@ export default function SettingsScreen() {
                         icon="logout"
                         tone="danger"
                         onPress={() => {
-                            logout().catch((error) => {
-                                Alert.alert('Logout failed', error instanceof Error ? error.message : 'Unknown error');
-                            });
+                            Alert.alert('Log out?', 'You will need to sign in again to access this account.', [
+                                { text: 'Cancel', style: 'cancel' },
+                                {
+                                    text: 'Logout',
+                                    style: 'destructive',
+                                    onPress: () => {
+                                        logout().catch((error) => {
+                                            Alert.alert('Logout failed', error instanceof Error ? error.message : 'Unknown error');
+                                        });
+                                    },
+                                },
+                            ]);
                         }}
                     />
                 </Card>
 
                 <Card>
-                    <SectionHeader icon="wifi-cog" title="ESP32 Wi-Fi" />
-                    <StatusBadge label="SETUP ONLY" color={colors.warning} />
+                    <SectionHeader icon="tools" title="Developer Tools" subtitle="Temporary simulation controls for testing." />
+                    <Text style={{ color: colors.text, fontWeight: '900' }}>Sensor Tests</Text>
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+                        {simulatedSensors.map((item) => (
+                            <CommandButton
+                                key={item.sensorName}
+                                label={item.label}
+                                icon={item.icon}
+                                tone={item.tone}
+                                disabled={simulatingAction}
+                                onPress={() => runDevAction(() => triggerSensor(item.sensorName), `${item.label} event sent.`)}
+                            />
+                        ))}
+                    </View>
+                    <Text style={{ color: colors.text, fontWeight: '900' }}>NFC Tests</Text>
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+                        <CommandButton
+                            label="Granted"
+                            icon="account-check-outline"
+                            tone="primary"
+                            disabled={simulatingAction}
+                            onPress={() => runDevAction(() => simulateNfc('authorized'), 'Authorized NFC event sent.')}
+                        />
+                        <CommandButton
+                            label="Denied"
+                            icon="account-cancel-outline"
+                            tone="danger"
+                            disabled={simulatingAction}
+                            onPress={() => runDevAction(() => simulateNfc('unauthorized'), 'Denied NFC event sent.')}
+                        />
+                    </View>
+                </Card>
+
+                <Card>
+                    <SectionHeader icon="wifi-cog" title="System Wi-Fi" />
+                    <StatusBadge label={systemWifiConnected ? 'CONNECTED' : 'SETUP'} color={systemWifiConnected ? colors.success : colors.warning} />
                     <Text style={{ color: colors.muted, lineHeight: 19 }}>
-                        Use this when moving the prototype to a new router or Wi-Fi network.
+                        Use this when moving the system to a new router or Wi-Fi network.
                     </Text>
                     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
                         <CommandButton
-                            label="Start Setup"
+                            label={systemWifiConnected || setupStarted ? 'Change Wi-Fi' : 'Start Setup'}
                             icon="wifi-cog"
                             tone="danger"
                             disabled={requestingEspWifiReset}
@@ -252,12 +458,12 @@ export default function SettingsScreen() {
                         />
                         {setupStarted && (
                             <CommandButton
-                                label="New Wi-Fi"
+                                label="Change Wi-Fi"
                                 icon="wifi-settings"
                                 tone="primary"
                                 onPress={() => {
                                     setSetupOpen(true);
-                                    setManualEntry(true);
+                                    setManualEntry(false);
                                     setScanError(null);
                                     setScanStatus(null);
                                     setNetworks([]);
@@ -267,46 +473,107 @@ export default function SettingsScreen() {
                     </View>
                     {setupStarted && (
                         <Text style={{ color: colors.muted, lineHeight: 19 }}>
-                            Setup is active. Connect this phone to ESP32_Config_Safe before opening New Wi-Fi.
+                            Setup is active. Connect this phone to Home Security System before opening Change Wi-Fi.
                         </Text>
                     )}
                 </Card>
             </ScrollView>
-            <Modal visible={setupOpen} animationType="slide" onRequestClose={() => setSetupOpen(false)}>
-                <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
+            <HouseMapEditor
+                visible={mapEditorOpen}
+                layout={houseMap}
+                sensors={sensors}
+                onChange={(nextLayout) => {
+                    setHouseMap(nextLayout).catch((error) => {
+                        Alert.alert('Could not save map', error instanceof Error ? error.message : 'Unknown error');
+                    });
+                }}
+                onClose={() => setMapEditorOpen(false)}
+            />
+            <Modal visible={pinSetupOpen} animationType="slide" onRequestClose={() => setPinSetupOpen(false)}>
+                <PinSetupScreen
+                    title={lockSettings.pin ? 'Change PIN' : 'Create PIN'}
+                    onCancel={() => setPinSetupOpen(false)}
+                    onComplete={(nextPin) =>
+                        saveSettings({ enabled: true, method: 'pin', pin: nextPin }).then(() => {
+                            setPinSetupOpen(false);
+                        })
+                    }
+                />
+            </Modal>
+            <Modal visible={!!renamingSensorId} transparent animationType="fade" onRequestClose={() => setRenamingSensorId(null)}>
+                <View style={{ flex: 1, backgroundColor: '#00000099', justifyContent: 'center', padding: spacing.page }}>
+                    <View style={{ backgroundColor: colors.surface, borderRadius: 8, padding: spacing.card, gap: 12 }}>
+                        <SectionHeader icon="pencil" title="Rename Sensor" />
+                        <TextInput
+                            value={sensorName}
+                            onChangeText={setSensorName}
+                            placeholder="Sensor name"
+                            placeholderTextColor={colors.muted}
+                            style={{
+                                backgroundColor: colors.surfaceAlt,
+                                color: colors.text,
+                                borderWidth: 1,
+                                borderColor: colors.border,
+                                borderRadius: 8,
+                                paddingHorizontal: 14,
+                                paddingVertical: 13,
+                                fontWeight: '800',
+                            }}
+                        />
+                        <View style={{ flexDirection: 'row', gap: 10 }}>
+                            <CommandButton label="Cancel" icon="close" onPress={() => setRenamingSensorId(null)} />
+                            <CommandButton
+                                label="Save"
+                                icon="content-save"
+                                tone="primary"
+                                onPress={() => {
+                                    if (!renamingSensorId || !sensorName.trim()) return;
+                                    setAlias(renamingSensorId, sensorName)
+                                        .then(() => setRenamingSensorId(null))
+                                        .catch((error) => Alert.alert('Could not rename sensor', error instanceof Error ? error.message : 'Unknown error'));
+                                }}
+                            />
+                        </View>
+                    </View>
+                </View>
+            </Modal>
+            <Modal visible={setupOpen} animationType="slide" onRequestClose={() => !requireWifiSetup && setSetupOpen(false)}>
+                <View style={{ flex: 1, backgroundColor: colors.background, paddingTop: Math.max(insets.top + spacing.page, 78) }}>
                     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-                        <ScrollView contentContainerStyle={{ padding: spacing.page, gap: spacing.gap }}>
+                        <ScrollView contentContainerStyle={{ paddingHorizontal: spacing.page, paddingBottom: spacing.page, gap: spacing.gap }}>
                             <View style={{ gap: 12 }}>
-                                <Pressable
-                                    onPress={() => setSetupOpen(false)}
-                                    style={{
-                                        alignSelf: 'flex-start',
-                                        minWidth: 118,
-                                        height: 42,
-                                        borderRadius: 8,
-                                        backgroundColor: colors.surfaceAlt,
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        borderWidth: 1,
-                                        borderColor: colors.border,
-                                        flexDirection: 'row',
-                                        gap: 6,
-                                        paddingHorizontal: 12,
-                                    }}
-                                >
-                                    <MaterialCommunityIcons name="arrow-left" size={19} color={colors.text} />
-                                    <Text style={{ color: colors.text, fontWeight: '900' }}>Back</Text>
-                                </Pressable>
-                                <SectionHeader icon="wifi-cog" title="New Wi-Fi" />
+                                {!requireWifiSetup && (
+                                    <Pressable
+                                        onPress={() => setSetupOpen(false)}
+                                        style={{
+                                            alignSelf: 'flex-start',
+                                            minWidth: 118,
+                                            height: 42,
+                                            borderRadius: 8,
+                                            backgroundColor: colors.surfaceAlt,
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            borderWidth: 1,
+                                            borderColor: colors.border,
+                                            flexDirection: 'row',
+                                            gap: 6,
+                                            paddingHorizontal: 12,
+                                        }}
+                                    >
+                                        <MaterialCommunityIcons name="arrow-left" size={19} color={colors.text} />
+                                        <Text style={{ color: colors.text, fontWeight: '900' }}>Back</Text>
+                                    </Pressable>
+                                )}
+                                <SectionHeader icon="wifi-cog" title="System Wi-Fi" />
                             </View>
 
                             <Card>
-                                <StatusBadge label="CONNECT TO ESP32_CONFIG_SAFE FIRST" color={colors.warning} />
+                                <StatusBadge label="CONNECT TO HOME SECURITY SYSTEM FIRST" color={colors.warning} />
                                 <Text style={{ color: colors.muted, lineHeight: 19 }}>
-                                    Connect your phone to ESP32_Config_Safe first, then enter the router Wi-Fi details. Use Scan only if you want the ESP32 to search nearby networks.
+                                    Connect your phone to Home Security System first, then choose the router Wi-Fi details.
                                 </Text>
                                 <Text style={{ color: colors.warning, fontWeight: '800', lineHeight: 19 }}>
-                                    ESP32 supports 2.4 GHz Wi-Fi only. 5 GHz-only routers and phone hotspots will not appear or connect.
+                                    The system supports 2.4 GHz Wi-Fi only. 5 GHz-only routers and phone hotspots will not appear or connect.
                                 </Text>
                                 {!!scanError && (
                                     <View
@@ -319,7 +586,7 @@ export default function SettingsScreen() {
                                             gap: 6,
                                         }}
                                     >
-                                        <Text style={{ color: colors.warning, fontWeight: '900' }}>ESP32 setup Wi-Fi not connected</Text>
+                                        <Text style={{ color: colors.warning, fontWeight: '900' }}>System setup Wi-Fi not connected</Text>
                                         <Text style={{ color: colors.text, lineHeight: 19 }}>{scanError}</Text>
                                     </View>
                                 )}
@@ -344,11 +611,6 @@ export default function SettingsScreen() {
                                         disabled={loadingNetworks}
                                         onPress={fetchNetworks}
                                     />
-                                    <CommandButton
-                                        label={manualEntry ? 'Use List' : 'Manual'}
-                                        icon={manualEntry ? 'format-list-bulleted' : 'pencil'}
-                                        onPress={() => setManualEntry((value) => !value)}
-                                    />
                                 </View>
 
                                 {!manualEntry && (
@@ -360,7 +622,7 @@ export default function SettingsScreen() {
                                                 <Text style={{ color: colors.muted }}>Scanning nearby Wi-Fi networks...</Text>
                                             </View>
                                         ) : networks.length === 0 ? (
-                                            <Text style={{ color: colors.muted }}>No networks found. Use manual entry for hidden Wi-Fi.</Text>
+                                            <Text style={{ color: colors.muted }}>No networks found. Tap Scan to refresh the list.</Text>
                                         ) : (
                                             networks.map((network) => {
                                                 const selected = network.ssid === ssid;
@@ -435,20 +697,20 @@ export default function SettingsScreen() {
                                         autoCapitalize="none"
                                         autoCorrect={false}
                                         style={{
-                                            backgroundColor: colors.surfaceAlt,
+                                            backgroundColor: '#062A4F',
                                             color: colors.text,
-                                            borderWidth: 1,
-                                            borderColor: colors.border,
+                                            borderWidth: 2,
+                                            borderColor: colors.primary,
                                             borderRadius: 8,
                                             paddingHorizontal: 14,
-                                            paddingVertical: 13,
-                                            fontWeight: '700',
+                                            paddingVertical: 15,
+                                            fontWeight: '800',
                                         }}
                                     />
                                 </View>
 
                                 <CommandButton
-                                    label={savingWifi ? 'Saving...' : 'Save Wi-Fi'}
+                                    label={savingWifi ? 'Connecting...' : 'Connect to Wi-Fi'}
                                     icon="content-save"
                                     tone="primary"
                                     disabled={savingWifi || loadingNetworks}
@@ -457,7 +719,7 @@ export default function SettingsScreen() {
                             </Card>
                         </ScrollView>
                     </KeyboardAvoidingView>
-                </SafeAreaView>
+                </View>
             </Modal>
         </FadeInView>
     );

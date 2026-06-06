@@ -3,24 +3,21 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import DashboardScreen from '../screens/DashboardScreen';
 import ActivityScreen from '../screens/ActivityScreen';
-import ToolsScreen from '../screens/ToolsScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 import { colors } from '../ui/theme';
 
 export type MainTabParamList = {
     Dashboard: undefined;
     Activity: undefined;
-    Tools: undefined;
-    Settings: undefined;
+    Settings: { openWifiSetup?: boolean; requireWifiSetup?: boolean } | undefined;
 };
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
 
-const tabIcons: Record<keyof MainTabParamList, keyof typeof MaterialCommunityIcons.glyphMap> = {
-    Dashboard: 'shield-home-outline',
-    Activity: 'timeline-clock-outline',
-    Tools: 'tools',
-    Settings: 'cog-outline',
+const tabIcons: Record<keyof MainTabParamList, { focused: keyof typeof MaterialCommunityIcons.glyphMap; idle: keyof typeof MaterialCommunityIcons.glyphMap }> = {
+    Dashboard: { focused: 'home', idle: 'home-outline' },
+    Activity: { focused: 'clock-time-three', idle: 'clock-outline' },
+    Settings: { focused: 'cog', idle: 'cog-outline' },
 };
 
 export default function MainTabs() {
@@ -66,13 +63,16 @@ export default function MainTabs() {
                     paddingLeft: 4,
                     justifyContent: 'center',
                 },
-                tabBarIcon: ({ color, size }) => (
-                    <MaterialCommunityIcons
-                        name={tabIcons[route.name as keyof MainTabParamList]}
-                        size={size + 1}
-                        color={color}
-                    />
-                ),
+                tabBarIcon: ({ color, size, focused }) => {
+                    const icons = tabIcons[route.name as keyof MainTabParamList];
+                    return (
+                        <MaterialCommunityIcons
+                            name={focused ? icons.focused : icons.idle}
+                            size={size + 1}
+                            color={color}
+                        />
+                    );
+                },
                 tabBarActiveTintColor: colors.primary,
                 tabBarInactiveTintColor: colors.subtle,
                 animation: 'none',
@@ -83,9 +83,8 @@ export default function MainTabs() {
                 },
             })}
         >
-            <Tab.Screen name="Dashboard" component={DashboardScreen} options={{ title: 'Home' }} />
+            <Tab.Screen name="Dashboard" component={DashboardScreen} options={{ title: 'Home', headerShown: false }} />
             <Tab.Screen name="Activity" component={ActivityScreen} options={{ title: 'Activity' }} />
-            <Tab.Screen name="Tools" component={ToolsScreen} options={{ title: 'Tools' }} />
             <Tab.Screen name="Settings" component={SettingsScreen} options={{ title: 'Settings' }} />
         </Tab.Navigator>
     );

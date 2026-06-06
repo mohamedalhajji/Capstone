@@ -13,6 +13,7 @@ function AuthInput({
     value,
     onChangeText,
     secureTextEntry,
+    right,
     keyboardType,
 }: {
     icon: keyof typeof MaterialCommunityIcons.glyphMap;
@@ -20,6 +21,7 @@ function AuthInput({
     value: string;
     onChangeText: (value: string) => void;
     secureTextEntry?: boolean;
+    right?: React.ReactNode;
     keyboardType?: 'default' | 'email-address';
 }) {
     return (
@@ -48,6 +50,7 @@ function AuthInput({
                 autoCorrect={false}
                 style={{ color: colors.text, flex: 1, fontSize: 15 }}
             />
+            {right}
         </View>
     );
 }
@@ -58,13 +61,15 @@ export default function AuthScreen() {
     const [name, setName] = useState('');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
+    const [showPassword, setShowPassword] = useState(false);
+    const [rememberMe, setRememberMe] = useState(true);
 
     const submit = async () => {
         try {
             if (mode === 'signup') {
-                await signup(name, email, password);
+                await signup(name, email, password, rememberMe);
             } else {
-                await login(email, password);
+                await login(email, password, rememberMe);
             }
         } catch (error) {
             Alert.alert(mode === 'signup' ? 'Sign up failed' : 'Login failed', getApiErrorMessage(error));
@@ -138,8 +143,33 @@ export default function AuthScreen() {
                         placeholder="Password"
                         value={password}
                         onChangeText={setPassword}
-                        secureTextEntry
+                        secureTextEntry={!showPassword}
+                        right={
+                            <Pressable onPress={() => setShowPassword((value) => !value)} style={{ padding: 4 }}>
+                                <MaterialCommunityIcons name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={21} color={colors.muted} />
+                            </Pressable>
+                        }
                     />
+                    <Pressable
+                        onPress={() => setRememberMe((value) => !value)}
+                        style={{ flexDirection: 'row', alignItems: 'center', gap: 8, alignSelf: 'flex-start' }}
+                    >
+                        <View
+                            style={{
+                                width: 22,
+                                height: 22,
+                                borderRadius: 6,
+                                borderWidth: 1,
+                                borderColor: rememberMe ? colors.primary : colors.border,
+                                backgroundColor: rememberMe ? colors.primary : 'transparent',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                            }}
+                        >
+                            {rememberMe && <MaterialCommunityIcons name="check" size={16} color={colors.background} />}
+                        </View>
+                        <Text style={{ color: colors.text, fontWeight: '800' }}>Remember me</Text>
+                    </Pressable>
                 </View>
 
                 <Pressable

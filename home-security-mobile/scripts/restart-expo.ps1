@@ -1,6 +1,6 @@
 $ErrorActionPreference = "Stop"
 
-$connections = Get-NetTCPConnection -LocalPort 8081 -ErrorAction SilentlyContinue
+$connections = Get-NetTCPConnection -LocalPort 8082 -ErrorAction SilentlyContinue
 $pids = $connections | Select-Object -ExpandProperty OwningProcess -Unique
 
 foreach ($processId in $pids) {
@@ -15,4 +15,13 @@ $env:EXPO_PUBLIC_API_URL = if ($env:EXPO_PUBLIC_API_URL) {
   "https://capstone-msv5.onrender.com/api"
 }
 
-npx expo start --lan -c
+$wifiAddress = Get-NetIPAddress -AddressFamily IPv4 -InterfaceAlias "Wi-Fi*" -ErrorAction SilentlyContinue |
+  Where-Object { $_.IPAddress -notlike "127.*" -and $_.AddressState -eq "Preferred" } |
+  Select-Object -ExpandProperty IPAddress -First 1
+
+if ($wifiAddress) {
+  $env:REACT_NATIVE_PACKAGER_HOSTNAME = $wifiAddress
+  Write-Host "Using Wi-Fi address for Expo LAN: $wifiAddress"
+}
+
+npx expo start --lan -c --port 8082

@@ -8,6 +8,8 @@ import { ActivityIndicator, View } from 'react-native';
 import { AuthProvider, useAuth } from './src/auth/AuthContext';
 import MainTabs from './src/navigation/MainTabs';
 import AuthScreen from './src/screens/AuthScreen';
+import { AppLockScreen } from './src/screens/AppLockScreen';
+import { useAppLock } from './src/hooks/useAppLock';
 import { colors } from './src/ui/theme';
 
 const queryClient = new QueryClient();
@@ -27,6 +29,12 @@ const DarkAppTheme = {
 
 function AppContent() {
     const { user, initializing } = useAuth();
+    const [unlocked, setUnlocked] = React.useState(false);
+    const { settings, loading: lockLoading, biometricSupported, saveSettings, authenticateBiometric } = useAppLock(user?.id);
+
+    React.useEffect(() => {
+        setUnlocked(false);
+    }, [user?.id]);
 
     if (initializing) {
         return (
@@ -36,7 +44,29 @@ function AppContent() {
         );
     }
 
-    return user ? <MainTabs /> : <AuthScreen />;
+    if (!user) return <AuthScreen />;
+
+    if (lockLoading) {
+        return (
+            <View style={{ flex: 1, backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center' }}>
+                <ActivityIndicator color={colors.primary} />
+            </View>
+        );
+    }
+
+    if (settings.enabled && !unlocked) {
+        return (
+            <AppLockScreen
+                settings={settings}
+                biometricSupported={biometricSupported}
+                onUnlock={() => setUnlocked(true)}
+                onUseBiometric={authenticateBiometric}
+                onSetPin={(pin) => saveSettings({ ...settings, method: 'pin', pin })}
+            />
+        );
+    }
+
+    return <MainTabs />;
 }
 
 export default function App() {

@@ -17,7 +17,7 @@
 #define RELAY_OFF HIGH
 
 // --- Emergency Provisioning Web Settings ---
-const char* ap_ssid = "ESP32_Config_Safe";       
+const char* ap_ssid = "Home Security System";       
 const char* ap_password = "";                    
 const String SYSTEM_ADMIN_PASSWORD = "12345678"; 
 
@@ -758,7 +758,7 @@ void handleRoot() { server.send(200, "text/html", webDashboardHTML); }
 void handleWebCommand() { if (server.hasArg("cmd")) { processCommand(server.arg("cmd")); } server.send(200, "text/plain", "OK"); }
 void handleAppWifiStatus() {
   server.sendHeader("Access-Control-Allow-Origin", "*");
-  server.send(200, "application/json", "{\"success\":true,\"setup_ap\":\"ESP32_Config_Safe\"}");
+  server.send(200, "application/json", "{\"success\":true,\"setup_ap\":\"Home Security System\"}");
 }
 
 void handleAuth() {
@@ -933,7 +933,7 @@ void setup() {
     } else {
       Serial.print("\n[WIFI]: Failed to connect. WiFi.status() = ");
       Serial.println(WiFi.status());
-      Serial.println("[WIFI]: Falling back to ESP32_Config_Safe setup mode.");
+      Serial.println("[WIFI]: Falling back to Home Security System setup mode.");
       startEmergencySystems();
     }
   }

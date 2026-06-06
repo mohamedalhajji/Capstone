@@ -10,8 +10,8 @@ type AuthContextValue = {
     user: AuthUser | null;
     initializing: boolean;
     authenticating: boolean;
-    login: (email: string, password: string) => Promise<void>;
-    signup: (name: string, email: string, password: string) => Promise<void>;
+    login: (email: string, password: string, remember?: boolean) => Promise<void>;
+    signup: (name: string, email: string, password: string, remember?: boolean) => Promise<void>;
     logout: () => Promise<void>;
 };
 
@@ -22,10 +22,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const [initializing, setInitializing] = useState(true);
     const [authenticating, setAuthenticating] = useState(false);
 
-    const saveSession = useCallback(async (nextSession: AuthSession) => {
+    const saveSession = useCallback(async (nextSession: AuthSession, remember = true) => {
         setAuthToken(nextSession.token);
         setSession(nextSession);
-        await AsyncStorage.setItem(SESSION_KEY, JSON.stringify(nextSession));
+        if (remember) {
+            await AsyncStorage.setItem(SESSION_KEY, JSON.stringify(nextSession));
+        } else {
+            await AsyncStorage.removeItem(SESSION_KEY);
+        }
     }, []);
 
     useEffect(() => {
@@ -61,10 +65,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }, []);
 
     const login = useCallback(
-        async (email: string, password: string) => {
+        async (email: string, password: string, remember = true) => {
             setAuthenticating(true);
             try {
-                await saveSession(await authService.login(email, password));
+                await saveSession(await authService.login(email, password), remember);
             } finally {
                 setAuthenticating(false);
             }
@@ -73,10 +77,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     );
 
     const signup = useCallback(
-        async (name: string, email: string, password: string) => {
+        async (name: string, email: string, password: string, remember = true) => {
             setAuthenticating(true);
             try {
-                await saveSession(await authService.signup(name, email, password));
+                await saveSession(await authService.signup(name, email, password), remember);
             } finally {
                 setAuthenticating(false);
             }
