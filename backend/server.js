@@ -28,7 +28,7 @@ const memorySensors = [
 
 const memoryState = {
   id: 1,
-  current_mode: "disarmed",
+  current_mode: "away",
   buzzer_on: false,
   sprinkler_on: false,
   door_locked: true,
@@ -132,18 +132,20 @@ async function setSystemMode(mode) {
   }
 
   const espCommand = mode === "away" ? "ON" : "OFF";
+  const doorLocked = mode === "away";
 
   try {
     const result = await pool.query(
       `UPDATE system_state
        SET current_mode = $1,
            esp_pending_command = $2,
+           door_locked = $3,
            buzzer_on = FALSE,
            sprinkler_on = FALSE,
            updated_at = CURRENT_TIMESTAMP
        WHERE id = 1
        RETURNING *`,
-      [mode, espCommand]
+      [mode, espCommand, doorLocked]
     );
 
     return result.rows[0];
@@ -151,6 +153,7 @@ async function setSystemMode(mode) {
     if (!isDbUnavailable(error)) throw error;
     memoryState.current_mode = mode;
     memoryState.esp_pending_command = espCommand;
+    memoryState.door_locked = doorLocked;
     memoryState.buzzer_on = false;
     memoryState.sprinkler_on = false;
     touchMemoryState();
@@ -232,14 +235,13 @@ async function findUserByEmail(email) {
 async function findUserById(id) {
   try {
     const result = await pool.query(
-      "SELECT id, name, email, created_at FROM users WHERE id = $1 LIMIT 1",
+      "SELECT id, name, email, password_hash, created_at FROM users WHERE id = $1 LIMIT 1",
       [id]
     );
     return result.rows[0] || null;
   } catch (error) {
     if (!isDbUnavailable(error)) throw error;
-    const user = memoryUsers.find((item) => item.id === Number(id));
-    return user ? publicUser(user) : null;
+    return memoryUsers.find((item) => item.id === Number(id)) || null;
   }
 }
 
@@ -695,7 +697,7 @@ app.get("/api/auth/me", async (req, res) => {
       throw error;
     }
 
-    res.json({ user });
+    res.json({ user: publicUser(user) });
   } catch (error) {
     if (error.name === "JsonWebTokenError" || error.name === "TokenExpiredError") {
       error.statusCode = 401;
@@ -709,6 +711,60 @@ app.get("/test-db", async (req, res) => {
   try {
     const result = await pool.query("SELECT NOW()");
     res.json({ success: true, time: result.rows[0] });
+  } catch (error) {
+    sendError(res, error);
+  }
+});
+
+app.post("/api/auth/verify-password", requireAuth, async (req, res) => {
+  try {
+    const currentPassword = String(req.body?.currentPassword || "");
+    const valid = currentPassword.length > 0 && await bcrypt.compare(currentPassword, req.user.password_hash);
+
+    if (!valid) {
+      const error = new Error("Current password is incorrect");
+      error.statusCode = 401;
+      throw error;
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    sendError(res, error);
+  }
+});
+
+app.post("/api/auth/change-password", requireAuth, async (req, res) => {
+  try {
+    const currentPassword = String(req.body?.currentPassword || "");
+    const newPassword = String(req.body?.newPassword || "");
+    const valid = currentPassword.length > 0 && await bcrypt.compare(currentPassword, req.user.password_hash);
+
+    if (!valid) {
+      const error = new Error("Current password is incorrect");
+      error.statusCode = 401;
+      throw error;
+    }
+
+    if (newPassword.length < 6) {
+      const error = new Error("Password must be at least 6 characters");
+      error.statusCode = 400;
+      throw error;
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, 10);
+
+    try {
+      await pool.query(
+        "UPDATE users SET password_hash = $1 WHERE id = $2",
+        [passwordHash, req.user.id]
+      );
+    } catch (error) {
+      if (!isDbUnavailable(error)) throw error;
+      const memoryUser = memoryUsers.find((user) => user.id === req.user.id);
+      if (memoryUser) memoryUser.password_hash = passwordHash;
+    }
+
+    res.json({ success: true });
   } catch (error) {
     sendError(res, error);
   }
@@ -785,27 +841,11 @@ app.get("/api/notifications", requireAuth, async (req, res) => {
   }
 });
 
-app.post("/api/simulate-event", requireAuth, async (req, res) => {
-  try {
-    res.json(await processSensorEvent(req.body?.sensor_name, "simulation"));
-  } catch (error) {
-    sendError(res, error);
-  }
-});
-
-app.post("/api/simulate-nfc", requireAuth, async (req, res) => {
-  try {
-    res.json(await processNfcAccess(req.body ?? {}));
-  } catch (error) {
-    sendError(res, error);
-  }
-});
-
 app.post("/api/reset-system", requireAuth, async (req, res) => {
   try {
     await pool.query(`
       UPDATE system_state
-      SET current_mode = 'disarmed',
+      SET current_mode = 'away',
           buzzer_on = FALSE,
           sprinkler_on = FALSE,
           door_locked = TRUE,
@@ -827,7 +867,7 @@ app.post("/api/reset-system", requireAuth, async (req, res) => {
     memoryState.buzzer_on = false;
     memoryState.sprinkler_on = false;
     memoryState.door_locked = true;
-    memoryState.current_mode = "disarmed";
+    memoryState.current_mode = "away";
     memoryState.esp_pending_command = "RESETOUTPUTS";
     touchMemoryState();
     for (const sensor of memorySensors) {
@@ -899,7 +939,7 @@ app.post("/api/full-reset", requireAuth, async (req, res) => {
 
     await pool.query(`
       UPDATE system_state
-      SET current_mode = 'disarmed',
+      SET current_mode = 'away',
           buzzer_on = FALSE,
           sprinkler_on = FALSE,
           door_locked = TRUE,
@@ -921,7 +961,7 @@ app.post("/api/full-reset", requireAuth, async (req, res) => {
     memoryEvents.length = 0;
     memoryNotifications.length = 0;
     memoryAccessLogs.length = 0;
-    memoryState.current_mode = "disarmed";
+    memoryState.current_mode = "away";
     memoryState.buzzer_on = false;
     memoryState.sprinkler_on = false;
     memoryState.door_locked = true;
