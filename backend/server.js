@@ -487,22 +487,8 @@ async function processNfcAccess({ authorized, nfc_uid, user_name }) {
   }
 
   if (authorized) {
-    let newMode = previousMode;
-    let modeChangeMessage = "mode unchanged";
-
-    if (previousMode === "away") {
-      newMode = "home";
-      modeChangeMessage = "system switched from away to home";
-    }
-    const modeChanged = previousMode !== newMode;
-    const authorizedAccessMessage = modeChanged
-      ? `Authorized NFC access granted (${previousMode} -> ${newMode})`
-      : "Authorized NFC access granted";
-
-    memoryState.door_locked = false;
-    memoryState.buzzer_on = false;
-    memoryState.current_mode = newMode;
-    touchMemoryState();
+    const authorizedAccessMessage = "Authorized NFC access granted";
+    const modeChangeMessage = "mode managed by ESP32";
 
     memoryAccessLogs.unshift({
       id: memoryAccessLogId++,
@@ -516,7 +502,7 @@ async function processNfcAccess({ authorized, nfc_uid, user_name }) {
       event_type: "authorized_access",
       severity: "low",
       message: authorizedAccessMessage,
-      action_taken: `door unlocked, ${modeChangeMessage}`,
+      action_taken: modeChangeMessage,
       created_at: new Date().toISOString(),
     });
     memoryNotifications.unshift({
@@ -527,16 +513,6 @@ async function processNfcAccess({ authorized, nfc_uid, user_name }) {
     });
 
     try {
-      await pool.query(
-        `UPDATE system_state
-         SET door_locked = FALSE,
-             buzzer_on = FALSE,
-             current_mode = $1,
-             updated_at = CURRENT_TIMESTAMP
-         WHERE id = 1`,
-        [newMode]
-      );
-
       await pool.query(
         `INSERT INTO access_logs (nfc_uid, user_name, access_result)
          VALUES ($1, $2, 'granted')`,
@@ -550,7 +526,7 @@ async function processNfcAccess({ authorized, nfc_uid, user_name }) {
           "authorized_access",
           "low",
           authorizedAccessMessage,
-          `door unlocked, ${modeChangeMessage}`,
+          modeChangeMessage,
         ]
       );
 
@@ -569,7 +545,6 @@ async function processNfcAccess({ authorized, nfc_uid, user_name }) {
     return {
       message: "Access granted",
       previousMode,
-      newMode,
     };
   }
 
