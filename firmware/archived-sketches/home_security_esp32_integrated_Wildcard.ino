@@ -116,7 +116,6 @@ bool bleTimeoutTriggered = false;
 #define SERVO_PIN    13
 const int OPEN_ANGLE = 170;       
 const int CLOSE_ANGLE = 12;       
-const unsigned long SERVO_SETTLE_MS = 650;
 
 // --- Sensor & Actuator Pin Mapping ---
 #define SMOKE_1_PIN  36  
@@ -139,16 +138,8 @@ MFRC522 rfid(rfid_SS_PIN, rfid_RST_PIN);
 Servo doorServo;
 
 int SMOKE_THRESHOLD = 900;  
-int FLAME_THRESHOLD = 3200;  
+int FLAME_THRESHOLD = 4050;  
 const unsigned long GAS_SAMPLE_INTERVAL_MS = 100;
-const unsigned long FLAME_SAMPLE_INTERVAL_MS = 120;
-const unsigned long PUMP_RUN_MS = 6000;
-const unsigned long FIRE_RETRIGGER_COOLDOWN_MS = 15000;
-const unsigned long LOCAL_FIRE_ECHO_IGNORE_MS = 30000;
-const int FIRE_CONFIRM_SAMPLES = 4;
-const int GAS_CONFIRM_SAMPLES = 8;
-const int FLAME_CLEAR_MARGIN = 80;
-const int GAS_CLEAR_MARGIN = 120;
 
 bool systemActive = true; 
 bool awayMode = false; 
@@ -174,12 +165,9 @@ unsigned long physicalThreatClearSince = 0;
 
 unsigned long hallwayPIR_Timer = 0;
 unsigned long garagePIR_Timer = 0;
-const unsigned long pirDebounceTime = 40; 
-const unsigned long PIR_PULSE_LATCH_MS = 2500;
+const unsigned long pirDebounceTime = 0; 
 volatile bool hallwayPIR_Pulse = false;
 volatile bool garagePIR_Pulse = false;
-unsigned long hallwayPIR_LatchUntil = 0;
-unsigned long garagePIR_LatchUntil = 0;
 
 bool isIntrusionActive = false;
 unsigned long intrusionTimer = 0;
@@ -189,16 +177,6 @@ unsigned long fireTimer = 0;
 bool pump1State = false; unsigned long pump1Timer = 0;
 bool pump2State = false; unsigned long pump2Timer = 0;
 bool pump3State = false; unsigned long pump3Timer = 0;
-unsigned long pump1CooldownUntil = 0;
-unsigned long pump2CooldownUntil = 0;
-unsigned long pump3CooldownUntil = 0;
-unsigned long lastLocalFireTriggerTime = 0;
-int kitchenFlameCounter = 0;
-int room1FlameCounter = 0;
-int room2FlameCounter = 0;
-int kitchenGasCounter = 0;
-int hallwayGasCounter = 0;
-int livingGasCounter = 0;
 
 bool pendingAwayMode = false;
 unsigned long awayModeActivationTimer = 0;
@@ -237,8 +215,6 @@ bool garagePIR_Triggered = false;
 bool lastPhysicalMotionTriggered = false;
 bool lastPhysicalDoorTriggered = false;
 bool lastPhysicalVibrationTriggered = false;
-bool lastHallwayPIRTriggered = false;
-bool lastGaragePIRTriggered = false;
 
 // Dynamic status string to hold current live threats globally
 String activeThreatLog = "";
@@ -481,34 +457,6 @@ bool debounceDigitalHigh(bool rawHigh, unsigned long& highSince, unsigned long h
   return millis() - highSince >= holdMs;
 }
 
-bool readSensitivePIR(bool rawHigh, bool pulseSeen, unsigned long& highSince, unsigned long& latchUntil) {
-  unsigned long now = millis();
-  if (pulseSeen) latchUntil = now + PIR_PULSE_LATCH_MS;
-
-  bool latchedHigh = (long)(now - latchUntil) < 0;
-  return debounceDigitalHigh(rawHigh || latchedHigh, highSince, pirDebounceTime);
-}
-
-bool confirmLowDanger(int value, int threshold, int clearMargin, int requiredSamples, int& counter) {
-  if (value < threshold) {
-    if (counter < requiredSamples) counter++;
-  } else if (value > threshold + clearMargin) {
-    counter = 0;
-  }
-
-  return counter >= requiredSamples;
-}
-
-bool confirmHighDanger(int value, int threshold, int clearMargin, int requiredSamples, int& counter) {
-  if (value > threshold) {
-    if (counter < requiredSamples) counter++;
-  } else if (value < threshold - clearMargin) {
-    counter = 0;
-  }
-
-  return counter >= requiredSamples;
-}
-
 bool debounceExpanderHigh(bool rawHigh, int& counter) {
   if (rawHigh) {
     counter = 1;
@@ -527,10 +475,6 @@ void resetSecurityEdges() {
   physicalThreatClearSince = 0;
   hallwayPIR_Timer = 0;
   garagePIR_Timer = 0;
-  hallwayPIR_LatchUntil = 0;
-  garagePIR_LatchUntil = 0;
-  lastHallwayPIRTriggered = false;
-  lastGaragePIRTriggered = false;
   reed1Counter = 0;
   reed2Counter = 0;
   reed3Counter = 0;
@@ -546,22 +490,15 @@ void triggerSecurityAlarm(const char* sensorName) {
   reportEspState("away", !doorOpen);
 }
 
-void moveDoorServo(int angle) {
-  doorServo.attach(SERVO_PIN);
-  doorServo.write(angle);
-  delay(SERVO_SETTLE_MS);
-  doorServo.detach();
-}
-
 void openDoorLocal() {
   doorOpen = true;
-  moveDoorServo(OPEN_ANGLE);
+  doorServo.write(OPEN_ANGLE);
   localDoorOverrideUntil = millis() + LOCAL_DOOR_OVERRIDE_MS;
 }
 
 void closeDoorLocal() {
   doorOpen = false;
-  moveDoorServo(CLOSE_ANGLE);
+  doorServo.write(CLOSE_ANGLE);
   localDoorOverrideUntil = millis() + LOCAL_DOOR_OVERRIDE_MS;
 }
 
@@ -582,16 +519,6 @@ void clearActiveOutputs() {
   pump1State = false;
   pump2State = false;
   pump3State = false;
-  pump1CooldownUntil = 0;
-  pump2CooldownUntil = 0;
-  pump3CooldownUntil = 0;
-  lastLocalFireTriggerTime = 0;
-  kitchenFlameCounter = 0;
-  room1FlameCounter = 0;
-  room2FlameCounter = 0;
-  kitchenGasCounter = 0;
-  hallwayGasCounter = 0;
-  livingGasCounter = 0;
   digitalWrite(BUZZER_PIN, RELAY_OFF);
   digitalWrite(PUMP_1_PIN, RELAY_OFF);
   digitalWrite(PUMP_2_PIN, RELAY_OFF);
@@ -678,7 +605,7 @@ void pollBackendCommands() {
     closeDoorLocal();
     playSecurityActivatedSound();
     reportEspState("away", true);
-    Serial.println("\n[APP]: Security enabled from mobile/web app. Door closed.");
+    Serial.println("\n[APP]: Security enabled from mobile/web app.");
   }
 
   if (allowBackendModeActuation && (backendHome || backendDisarmed) && awayMode) {
@@ -688,7 +615,7 @@ void pollBackendCommands() {
     openDoorLocal();
     playSecurityDeactivatedSound();
     reportEspState("disarmed", false);
-    Serial.println("\n[APP]: Security disabled from mobile/web app. Door opened.");
+    Serial.println("\n[APP]: Security disabled from mobile/web app.");
   }
 
   if (backendBuzzerOn && !backendBuzzerLatched) {
@@ -700,9 +627,7 @@ void pollBackendCommands() {
     backendBuzzerLatched = false;
   }
 
-  bool ignoreBackendSprinklerEcho = lastLocalFireTriggerTime > 0 && millis() - lastLocalFireTriggerTime < LOCAL_FIRE_ECHO_IGNORE_MS;
-
-  if (backendSprinklerOn && !backendSprinklerLatched && !ignoreBackendSprinklerEcho) {
+  if (backendSprinklerOn && !backendSprinklerLatched) {
     backendSprinklerLatched = true;
     pump1State = true;
     pump2State = true;
@@ -713,8 +638,6 @@ void pollBackendCommands() {
     isFireActive = true;
     fireTimer = millis();
     Serial.println("\n[APP]: Backend sprinkler state triggered pump test.");
-  } else if (backendSprinklerOn && ignoreBackendSprinklerEcho) {
-    Serial.println("\n[APP]: Ignored backend sprinkler echo after local fire event.");
   }
 
   if (backendSprinklerOff) {
@@ -797,8 +720,8 @@ void processCommand(String command) {
     playSecurityActivatedSound(); 
     reportSystemMode("away");
     reportEspState("away", true);
-    Serial.println("\n[SECURITY]: ENABLED. Door closed."); 
-    if (bleActive && deviceConnected) { sendBLE("[SECURITY]: ENABLED. Door closed.\n"); } 
+    Serial.println("\nðŸ”’ SECURITY: ENABLED & DOOR CLOSED"); 
+    if (bleActive && deviceConnected) { sendBLE("ðŸ”’ SECURITY: ENABLED & DOOR CLOSED\n"); } 
   } 
   else if (command.equalsIgnoreCase("OFF")) { 
     awayMode = false; 
@@ -807,8 +730,8 @@ void processCommand(String command) {
     playSecurityDeactivatedSound(); 
     reportSystemMode("disarmed");
     reportEspState("disarmed", false);
-    Serial.println("\n[SECURITY]: DISABLED. Door opened."); 
-    if (bleActive && deviceConnected) { sendBLE("[SECURITY]: DISABLED. Door opened.\n"); } 
+    Serial.println("\nðŸ”“ SECURITY: DISABLED & DOOR OPENED"); 
+    if (bleActive && deviceConnected) { sendBLE("ðŸ”“ SECURITY: DISABLED & DOOR OPENED\n"); } 
   } 
   else if (command.equalsIgnoreCase("OPEN")) { 
     openDoorLocal(); 
@@ -1118,7 +1041,7 @@ void setup() {
   digitalWrite(PUMP_1_PIN, RELAY_OFF); digitalWrite(PUMP_2_PIN, RELAY_OFF); digitalWrite(PUMP_3_PIN, RELAY_OFF); digitalWrite(BUZZER_PIN, RELAY_OFF);
   pinMode(PUMP_1_PIN, OUTPUT); pinMode(PUMP_2_PIN, OUTPUT); pinMode(PUMP_3_PIN, OUTPUT); pinMode(BUZZER_PIN, OUTPUT);
 
-  pinMode(PIR_1_PIN, INPUT); pinMode(PIR_2_PIN, INPUT);
+  pinMode(PIR_1_PIN, INPUT_PULLDOWN); pinMode(PIR_2_PIN, INPUT_PULLDOWN);
   attachInterrupt(digitalPinToInterrupt(PIR_1_PIN), onHallwayPIRRise, RISING);
   attachInterrupt(digitalPinToInterrupt(PIR_2_PIN), onGaragePIRRise, RISING);
   pinMode(FLAME_1_PIN, INPUT); pinMode(FLAME_2_PIN, INPUT); pinMode(FLAME_3_PIN, INPUT);
@@ -1178,7 +1101,7 @@ void setup() {
 
   SPI.begin(18, 19, 23, 5); rfid.PCD_Init(); rfid.PCD_SetAntennaGain(rfid.RxGain_max); rfid.PCD_AntennaOn(); delay(50); 
   Wire.begin(21, 22); Wire.beginTransmission(PCF8574_ADDRESS); Wire.write(0xFF); Wire.endTransmission();
-  doorOpen = true;
+  doorServo.attach(SERVO_PIN); doorServo.write(OPEN_ANGLE); 
 }
 
 void loop() {
@@ -1230,7 +1153,12 @@ void loop() {
   // ðŸ›¡ï¸ [Sensor Matrix Engine Loops]
   if (millis() - lastNFCCheckTime >= 1000) { lastNFCCheckTime = millis(); rfid.PCD_Init(); rfid.PCD_SetAntennaGain(rfid.RxGain_max); rfid.PCD_AntennaOn(); }
 
-  bool nfcCardPresent = rfid.PICC_IsNewCardPresent() && rfid.PICC_ReadCardSerial();
+  bool safetyOutputActive = isIntrusionActive || isFireActive || pump1State || pump2State || pump3State;
+  bool nfcCardPresent = false;
+
+  if (!safetyOutputActive) {
+    nfcCardPresent = rfid.PICC_IsNewCardPresent() && rfid.PICC_ReadCardSerial();
+  }
 
   if (!nfcCardPresent && nfcCardHeld && millis() - nfcLastSeenTime >= NFC_RELEASE_MS) {
       nfcCardHeld = false;
@@ -1238,21 +1166,16 @@ void loop() {
 
   if (nfcCardPresent) {
       nfcLastSeenTime = millis();
-      bool accessGranted = true;
-      for (byte i = 0; i < 4; i++) { if (rfid.uid.uidByte[i] != authorizedUID[i]) { accessGranted = false; break; } }
-      bool activeDangerOutput = isIntrusionActive || isFireActive || pump1State || pump2State || pump3State;
-      bool canProcessCard = !nfcCardHeld && (millis() - lastCardReadTime >= cardCooldown || (accessGranted && activeDangerOutput));
-
-      if (canProcessCard) { 
+      if (!nfcCardHeld && millis() - lastCardReadTime >= cardCooldown) { 
         nfcCardHeld = true;
         lastCardReadTime = millis(); 
-        reportNfcAccess(accessGranted);
+        bool accessGranted = true;
+        for (byte i = 0; i < 4; i++) { if (rfid.uid.uidByte[i] != authorizedUID[i]) { accessGranted = false; break; } }
 
         if (accessGranted) {
           wrongCardCount = 0;
-          clearActiveOutputs();
+          digitalWrite(BUZZER_PIN, RELAY_OFF);
           playCorrectCardSound();
-
           if (doorOpen) {
             closeDoorLocal();
             awayMode = true;
@@ -1289,16 +1212,8 @@ void loop() {
 
   hallwayPIR_Raw = (digitalRead(PIR_1_PIN) == HIGH);
   garagePIR_Raw = (digitalRead(PIR_2_PIN) == HIGH);
-  hallwayPIR_Triggered = readSensitivePIR(hallwayPIR_Raw, hallwayPIR_Interrupt, hallwayPIR_Timer, hallwayPIR_LatchUntil);
-  garagePIR_Triggered = readSensitivePIR(garagePIR_Raw, garagePIR_Interrupt, garagePIR_Timer, garagePIR_LatchUntil);
-
-  if (hallwayPIR_Triggered && !lastHallwayPIRTriggered) {
-    Serial.println("\n[PIR]: Hallway motion detected.");
-  }
-
-  if (garagePIR_Triggered && !lastGaragePIRTriggered) {
-    Serial.println("\n[PIR]: Garage motion detected.");
-  }
+  hallwayPIR_Triggered = hallwayPIR_Interrupt || debounceDigitalHigh(hallwayPIR_Raw, hallwayPIR_Timer, pirDebounceTime);
+  garagePIR_Triggered = garagePIR_Interrupt || debounceDigitalHigh(garagePIR_Raw, garagePIR_Timer, pirDebounceTime);
 
   if (millis() - lastExpanderCheckTime >= 20) {
     lastExpanderCheckTime = millis();
@@ -1328,12 +1243,9 @@ void loop() {
 
   bool intrusionInputsAllowed = (long)(millis() - ignoreIntrusionUntil) >= 0;
 
-  if (physicalMotionTriggered && !lastPhysicalMotionTriggered) {
-    reportSensorEvent(SENSOR_MOTION);
-    if (awayMode && intrusionInputsAllowed) {
-      triggerSecurityAlarm(SENSOR_MOTION);
-    }
-  }
+if (awayMode && intrusionInputsAllowed && physicalMotionTriggered && !lastPhysicalMotionTriggered) {
+  triggerSecurityAlarm(SENSOR_MOTION);
+}
 
 if (awayMode && intrusionInputsAllowed && physicalDoorTriggered && !lastPhysicalDoorTriggered) {
   triggerSecurityAlarm(SENSOR_DOOR);
@@ -1344,42 +1256,17 @@ if (awayMode && intrusionInputsAllowed && physicalVibrationTriggered && !lastPhy
 }
 
   lastPhysicalMotionTriggered = physicalMotionTriggered;
-  lastHallwayPIRTriggered = hallwayPIR_Triggered;
-  lastGaragePIRTriggered = garagePIR_Triggered;
   lastPhysicalDoorTriggered = physicalDoorTriggered;
   lastPhysicalVibrationTriggered = physicalVibrationTriggered;
 
-  if (millis() - lastFlameCheckTime >= FLAME_SAMPLE_INTERVAL_MS) {
+  if (millis() - lastFlameCheckTime >= 80) {
     lastFlameCheckTime = millis();
     kitchenFlame = analogRead(FLAME_1_PIN); room1Flame = analogRead(FLAME_2_PIN); room2Flame = analogRead(FLAME_3_PIN); 
-    unsigned long now = millis();
-    bool kitchenFire = confirmLowDanger(kitchenFlame, FLAME_THRESHOLD, FLAME_CLEAR_MARGIN, FIRE_CONFIRM_SAMPLES, kitchenFlameCounter);
-    bool room1Fire = confirmLowDanger(room1Flame, FLAME_THRESHOLD, FLAME_CLEAR_MARGIN, FIRE_CONFIRM_SAMPLES, room1FlameCounter);
-    bool room2Fire = confirmLowDanger(room2Flame, FLAME_THRESHOLD, FLAME_CLEAR_MARGIN, FIRE_CONFIRM_SAMPLES, room2FlameCounter);
-    bool currentFireCondition = kitchenFire || room1Fire || room2Fire;
-
-    if (kitchenFire && !pump1State && (long)(now - pump1CooldownUntil) >= 0) {
-      pump1State = true;
-      pump1Timer = now;
-      lastLocalFireTriggerTime = now;
-      Serial.printf("\n[FLAME]: Kitchen confirmed. Value=%d Threshold=%d\n", kitchenFlame, FLAME_THRESHOLD);
-    }
-
-    if (room1Fire && !pump2State && (long)(now - pump2CooldownUntil) >= 0) {
-      pump2State = true;
-      pump2Timer = now;
-      lastLocalFireTriggerTime = now;
-      Serial.printf("\n[FLAME]: Room 1 confirmed. Value=%d Threshold=%d\n", room1Flame, FLAME_THRESHOLD);
-    }
-
-    if (room2Fire && !pump3State && (long)(now - pump3CooldownUntil) >= 0) {
-      pump3State = true;
-      pump3Timer = now;
-      lastLocalFireTriggerTime = now;
-      Serial.printf("\n[FLAME]: Room 2 confirmed. Value=%d Threshold=%d\n", room2Flame, FLAME_THRESHOLD);
-    }
-
-    if (currentFireCondition && (pump1State || pump2State || pump3State)) {
+    bool currentFireCondition = false;
+    if (kitchenFlame < FLAME_THRESHOLD) { currentFireCondition = true; pump1State = true; pump1Timer = millis(); }
+    if (room1Flame < FLAME_THRESHOLD)   { currentFireCondition = true; pump2State = true; pump2Timer = millis(); }
+    if (room2Flame < FLAME_THRESHOLD)   { currentFireCondition = true; pump3State = true; pump3Timer = millis(); }
+    if (currentFireCondition) {
       reportSensorEvent(SENSOR_FLAME);
       if (!isFireActive) {
         isFireActive = true;
@@ -1392,11 +1279,7 @@ if (awayMode && intrusionInputsAllowed && physicalVibrationTriggered && !lastPhy
   if (millis() - lastSmokeCheckTime >= GAS_SAMPLE_INTERVAL_MS) {
     lastSmokeCheckTime = millis();
     kitchenSmoke = analogRead(SMOKE_1_PIN); hallwaySmoke = analogRead(SMOKE_2_PIN); livingSmoke = analogRead(SMOKE_3_PIN);
-    bool kitchenGas = confirmHighDanger(kitchenSmoke, SMOKE_THRESHOLD, GAS_CLEAR_MARGIN, GAS_CONFIRM_SAMPLES, kitchenGasCounter);
-    bool hallwayGas = confirmHighDanger(hallwaySmoke, SMOKE_THRESHOLD, GAS_CLEAR_MARGIN, GAS_CONFIRM_SAMPLES, hallwayGasCounter);
-    bool livingGas = confirmHighDanger(livingSmoke, SMOKE_THRESHOLD, GAS_CLEAR_MARGIN, GAS_CONFIRM_SAMPLES, livingGasCounter);
-
-    if (kitchenGas || hallwayGas || livingGas) {
+    if (kitchenSmoke > SMOKE_THRESHOLD || hallwaySmoke > SMOKE_THRESHOLD || livingSmoke > SMOKE_THRESHOLD) {
       reportSensorEvent(SENSOR_GAS);
       if (!isFireActive) {
         isFireActive = true;
@@ -1407,13 +1290,13 @@ if (awayMode && intrusionInputsAllowed && physicalVibrationTriggered && !lastPhy
     }
   }
 
-  if (pendingAwayMode && (millis() - awayModeActivationTimer >= AWAY_ARM_DELAY_MS)) { pendingAwayMode = false; awayMode = true; resetSecurityEdges(); reportSystemMode("away"); reportEspState("away", !doorOpen); playSecurityActivatedSound(); }
+  if (pendingAwayMode && (millis() - awayModeActivationTimer >= AWAY_ARM_DELAY_MS)) { pendingAwayMode = false; awayMode = true; resetSecurityEdges(); reportSystemMode("away"); reportEspState("away", true); playSecurityActivatedSound(); }
   if (isIntrusionActive && (millis() - intrusionTimer >= ALARM_BURST_DURATION_MS)) { isIntrusionActive = false; reportEspState(awayMode ? "away" : "disarmed", !doorOpen); }
   if (isFireActive && (millis() - fireTimer >= ALARM_BURST_DURATION_MS)) { isFireActive = false; reportEspState(awayMode ? "away" : "disarmed", !doorOpen); } 
 
-  if (pump1State && (millis() - pump1Timer >= PUMP_RUN_MS)) { pump1State = false; pump1CooldownUntil = millis() + FIRE_RETRIGGER_COOLDOWN_MS; kitchenFlameCounter = 0; if (!pump2State && !pump3State) reportEspState(awayMode ? "away" : "disarmed", !doorOpen); }
-  if (pump2State && (millis() - pump2Timer >= PUMP_RUN_MS)) { pump2State = false; pump2CooldownUntil = millis() + FIRE_RETRIGGER_COOLDOWN_MS; room1FlameCounter = 0; if (!pump1State && !pump3State) reportEspState(awayMode ? "away" : "disarmed", !doorOpen); }
-  if (pump3State && (millis() - pump3Timer >= PUMP_RUN_MS)) { pump3State = false; pump3CooldownUntil = millis() + FIRE_RETRIGGER_COOLDOWN_MS; room2FlameCounter = 0; if (!pump1State && !pump2State) reportEspState(awayMode ? "away" : "disarmed", !doorOpen); }
+  if (pump1State && (millis() - pump1Timer >= 10000)) { pump1State = false; if (!pump2State && !pump3State) reportEspState(awayMode ? "away" : "disarmed", !doorOpen); }
+  if (pump2State && (millis() - pump2Timer >= 10000)) { pump2State = false; if (!pump1State && !pump3State) reportEspState(awayMode ? "away" : "disarmed", !doorOpen); }
+  if (pump3State && (millis() - pump3Timer >= 10000)) { pump3State = false; if (!pump1State && !pump2State) reportEspState(awayMode ? "away" : "disarmed", !doorOpen); }
 
   // ðŸŽ¯ Direct, Real-time Buzzer Override for Armed Security Breaches
   bool shouldAlarmBeActive = (isIntrusionActive || isFireActive);
@@ -1428,12 +1311,12 @@ if (awayMode && intrusionInputsAllowed && physicalVibrationTriggered && !lastPhy
 
   // ðŸŽ¯ NEW FEATURE: Dynamic Continuous Alerts Generation Module (Every 2 seconds loop)
   String temporaryThreatBuffer = "";
-  if (kitchenFlameCounter >= FIRE_CONFIRM_SAMPLES) temporaryThreatBuffer += "[CRITICAL]: FIRE FLAME DETECTED IN KITCHEN! ðŸ”¥\n";
-  if (room1FlameCounter >= FIRE_CONFIRM_SAMPLES)   temporaryThreatBuffer += "[CRITICAL]: FIRE FLAME DETECTED IN ROOM 1! ðŸ”¥\n";
-  if (room2FlameCounter >= FIRE_CONFIRM_SAMPLES)   temporaryThreatBuffer += "[CRITICAL]: FIRE FLAME DETECTED IN ROOM 2! ðŸ”¥\n";
-  if (kitchenGasCounter >= GAS_CONFIRM_SAMPLES) temporaryThreatBuffer += "[WARNING]: DENSE SMOKE DETECTED IN KITCHEN! ðŸ’¨\n";
-  if (hallwayGasCounter >= GAS_CONFIRM_SAMPLES) temporaryThreatBuffer += "[WARNING]: DENSE SMOKE DETECTED IN HALLWAY! ðŸ’¨\n";
-  if (livingGasCounter >= GAS_CONFIRM_SAMPLES)  temporaryThreatBuffer += "[WARNING]: DENSE SMOKE DETECTED IN LIVING ROOM! ðŸ’¨\n";
+  if (kitchenFlame < FLAME_THRESHOLD) temporaryThreatBuffer += "[CRITICAL]: FIRE FLAME DETECTED IN KITCHEN! ðŸ”¥\n";
+  if (room1Flame < FLAME_THRESHOLD)   temporaryThreatBuffer += "[CRITICAL]: FIRE FLAME DETECTED IN ROOM 1! ðŸ”¥\n";
+  if (room2Flame < FLAME_THRESHOLD)   temporaryThreatBuffer += "[CRITICAL]: FIRE FLAME DETECTED IN ROOM 2! ðŸ”¥\n";
+  if (kitchenSmoke > SMOKE_THRESHOLD) temporaryThreatBuffer += "[WARNING]: DENSE SMOKE DETECTED IN KITCHEN! ðŸ’¨\n";
+  if (hallwaySmoke > SMOKE_THRESHOLD) temporaryThreatBuffer += "[WARNING]: DENSE SMOKE DETECTED IN HALLWAY! ðŸ’¨\n";
+  if (livingSmoke > SMOKE_THRESHOLD)  temporaryThreatBuffer += "[WARNING]: DENSE SMOKE DETECTED IN LIVING ROOM! ðŸ’¨\n";
   
   if (awayMode) {
     if (hallwayPIR_Triggered) temporaryThreatBuffer += "[BREACH]: INTRUSION MOVEMENT INSIDE THE HALLWAY! ðŸš¨\n";
@@ -1465,9 +1348,9 @@ if (awayMode && intrusionInputsAllowed && physicalVibrationTriggered && !lastPhy
     int r2FlamePct = map(constrain(room2Flame, 0, 4095), 4095, 3000, 0, 100);
     if(kFlamePct < 0) kFlamePct = 0; if(r1FlamePct < 0) r1FlamePct = 0; if(r2FlamePct < 0) r2FlamePct = 0;
 
-    String kFlameStatus = (kitchenFlameCounter >= FIRE_CONFIRM_SAMPLES) ? "DANGER!ðŸ”¥" : "SAFE  ";
-    String r1FlameStatus = (room1FlameCounter >= FIRE_CONFIRM_SAMPLES) ? "DANGER!ðŸ”¥" : "SAFE  ";
-    String r2FlameStatus = (room2FlameCounter >= FIRE_CONFIRM_SAMPLES) ? "DANGER!ðŸ”¥" : "SAFE  ";
+    String kFlameStatus = (kitchenFlame < FLAME_THRESHOLD) ? "DANGER!ðŸ”¥" : "SAFE  ";
+    String r1FlameStatus = (room1Flame < FLAME_THRESHOLD) ? "DANGER!ðŸ”¥" : "SAFE  ";
+    String r2FlameStatus = (room2Flame < FLAME_THRESHOLD) ? "DANGER!ðŸ”¥" : "SAFE  ";
 
     String currentSystemMode = awayMode ? "[AWAY MODE ðŸ”’]" : "[NIGHT/HOME MODE ðŸ ]";
 

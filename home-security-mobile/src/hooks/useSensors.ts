@@ -5,6 +5,6 @@ export function useSensors() {
     return useQuery({
         queryKey: ['sensors'],
         queryFn: sensorService.getSensors,
-        refetchInterval: 3000,
+        refetchInterval: 500,
     });
 }

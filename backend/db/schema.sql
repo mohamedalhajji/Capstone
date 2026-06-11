@@ -1,6 +1,6 @@
 CREATE TABLE IF NOT EXISTS system_state (
   id INTEGER PRIMARY KEY DEFAULT 1,
-  current_mode VARCHAR(20) NOT NULL DEFAULT 'disarmed'
+  current_mode VARCHAR(20) NOT NULL DEFAULT 'away'
     CHECK (current_mode IN ('disarmed', 'home', 'away')),
   buzzer_on BOOLEAN NOT NULL DEFAULT FALSE,
   sprinkler_on BOOLEAN NOT NULL DEFAULT FALSE,
@@ -58,8 +58,15 @@ CREATE TABLE IF NOT EXISTS access_logs (
 );
 
 INSERT INTO system_state (id, current_mode, buzzer_on, sprinkler_on, door_locked)
-VALUES (1, 'disarmed', FALSE, FALSE, TRUE)
+VALUES (1, 'away', FALSE, FALSE, TRUE)
 ON CONFLICT (id) DO NOTHING;
+
+UPDATE system_state
+SET current_mode = 'away',
+    door_locked = TRUE,
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = 1
+  AND current_mode = 'disarmed';
 
 INSERT INTO sensors (sensor_name, sensor_type, location)
 VALUES

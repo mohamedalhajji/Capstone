@@ -12,7 +12,7 @@ async function resetDemoDatabase() {
 
     await client.query(`
       INSERT INTO system_state (id, current_mode, buzzer_on, sprinkler_on, door_locked, esp_pending_command, updated_at)
-      VALUES (1, 'disarmed', FALSE, FALSE, TRUE, 'RESETOUTPUTS', CURRENT_TIMESTAMP)
+      VALUES (1, 'away', FALSE, FALSE, TRUE, 'RESETOUTPUTS', CURRENT_TIMESTAMP)
       ON CONFLICT (id) DO UPDATE
       SET current_mode = EXCLUDED.current_mode,
           buzzer_on = EXCLUDED.buzzer_on,

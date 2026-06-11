@@ -8,7 +8,7 @@ export function useSystemState() {
   const stateQuery = useQuery({
     queryKey: ['system-state'],
     queryFn: systemService.getState,
-    refetchInterval: 3000,
+    refetchInterval: 500,
   });
 
   const setModeMutation = useMutation({
@@ -21,8 +21,8 @@ export function useSystemState() {
 
   const fullResetMutation = useMutation({
     mutationFn: systemService.fullReset,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['system-state'] });
+    onSuccess: (state) => {
+      queryClient.setQueryData(['system-state'], state);
       queryClient.invalidateQueries({ queryKey: ['sensors'] });
       queryClient.invalidateQueries({ queryKey: ['events'] });
       queryClient.invalidateQueries({ queryKey: ['access-logs'] });
@@ -31,8 +31,8 @@ export function useSystemState() {
 
   const resetSensorsMutation = useMutation({
     mutationFn: systemService.resetSensors,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['system-state'] });
+    onSuccess: (state) => {
+      queryClient.setQueryData(['system-state'], state);
       queryClient.invalidateQueries({ queryKey: ['sensors'] });
       queryClient.invalidateQueries({ queryKey: ['events'] });
     },

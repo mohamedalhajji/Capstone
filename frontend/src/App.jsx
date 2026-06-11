@@ -145,6 +145,22 @@ function App() {
         </div>
       </Section>
 
+      <Section title="Test Tools">
+        <div style={styles.flex}>
+          {[
+            ["motion_living_room", "Motion"],
+            ["gas_kitchen", "Gas"],
+            ["flame_kitchen", "Fire"],
+            ["door_main", "Main Door"],
+            ["vibration_window", "Window"],
+          ].map(([sensor, label]) => (
+            <Btn key={sensor} onClick={() => authedRequest(() => axios.post(`${API}/api/simulate-event`, { sensor_name: sensor }, { headers }))}>{label}</Btn>
+          ))}
+          <Btn onClick={() => authedRequest(() => axios.post(`${API}/api/simulate-nfc`, { authorized: true }, { headers }))}>NFC Success</Btn>
+          <Btn danger onClick={() => authedRequest(() => axios.post(`${API}/api/simulate-nfc`, { authorized: false }, { headers }))}>NFC Fail</Btn>
+        </div>
+      </Section>
+
       <div style={styles.mainGrid}>
         <Section title="Notifications">
           {notifications.length === 0 ? <p>No notifications</p> : notifications.map((n) => (

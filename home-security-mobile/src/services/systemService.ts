@@ -23,23 +23,33 @@ function mapSystemState(row: BackendSystemState): SystemState {
     };
 }
 
+async function getSystemState(): Promise<SystemState> {
+    const { data } = await api.get<BackendSystemState>('/system-state');
+    return mapSystemState(data);
+}
+
+async function setSystemMode(mode: SystemMode): Promise<SystemState> {
+    const { data } = await api.put<BackendSystemState>('/system-mode', { mode });
+    return mapSystemState(data);
+}
+
 export const systemService = {
     async getState(): Promise<SystemState> {
-        const { data } = await api.get<BackendSystemState>('/system-state');
-        return mapSystemState(data);
+        return getSystemState();
     },
 
     async setMode(mode: SystemMode): Promise<SystemState> {
-        const { data } = await api.put<BackendSystemState>('/system-mode', { mode });
-        return mapSystemState(data);
+        return setSystemMode(mode);
     },
 
-    async fullReset(): Promise<void> {
+    async fullReset(): Promise<SystemState> {
         await api.post('/full-reset');
+        return setSystemMode('away');
     },
 
-    async resetSensors(): Promise<void> {
+    async resetSensors(): Promise<SystemState> {
         await api.post('/reset-system');
+        return setSystemMode('away');
     },
 
     async requestEspWifiReset(): Promise<void> {

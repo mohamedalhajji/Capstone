@@ -42,6 +42,9 @@ ESP32 operation.
 | Authorized NFC | Scan authorized card | Door opens/disarms, buzzer clears | Access log granted |
 | Unauthorized NFC | Scan wrong card | Warning/alarm behavior triggers | Access log denied and event recorded |
 | PIR intrusion | Arm Away, trigger PIR | Buzzer alarm | Motion event appears in Activity |
+| PIR noise rejection | Arm Away, pulse PIR line for less than 1 second | No buzzer alarm | No motion event is created |
+| NFC alarm override | Trigger an active alarm, then scan authorized card | Buzzer/pumps clear and door/mode toggles immediately | Access log granted and state updates |
+| Offline alarm response | Disconnect internet, Arm Away, trigger intrusion | Buzzer rings immediately; sensor loop keeps running | Event is sent later when backend is reachable |
 | Door/reed intrusion | Arm Away, open door | Buzzer alarm | Door event appears in Activity |
 | Vibration intrusion | Trigger vibration | Buzzer alarm | Vibration event appears in Activity |
 | Flame detection | Trigger flame sensor carefully | Pump activates and buzzer alarms | Flame event appears in Activity |

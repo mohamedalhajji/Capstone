@@ -95,15 +95,12 @@ export default function DashboardScreen() {
 
         AsyncStorage.getItem(WIFI_PROMPT_KEY)
             .then((seen) => {
-                if (active && systemState && (!seen || !systemOnline)) {
+                if (active && systemState && !seen) {
                     setWifiPromptOpen(true);
+                    AsyncStorage.setItem(WIFI_PROMPT_KEY, 'true').catch(() => undefined);
                 }
             })
-            .catch(() => {
-                if (active && systemState && !systemOnline) {
-                    setWifiPromptOpen(true);
-                }
-            });
+            .catch(() => undefined);
 
         return () => {
             active = false;

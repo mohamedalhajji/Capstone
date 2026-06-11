@@ -1,3 +1,4 @@
+import axios from 'axios';
 import { api } from '../api/client';
 import { AuthSession, AuthUser } from '../types/auth';
 
@@ -43,5 +44,28 @@ export const authService = {
     async me(): Promise<AuthUser> {
         const { data } = await api.get<{ user: BackendUser }>('/auth/me');
         return mapUser(data.user);
+    },
+
+    async verifyPassword(email: string, currentPassword: string): Promise<void> {
+        try {
+            await api.post('/auth/verify-password', { currentPassword });
+        } catch (error) {
+            if (axios.isAxiosError(error) && error.response?.status === 404) {
+                await api.post('/auth/login', { email, password: currentPassword });
+                return;
+            }
+            throw error;
+        }
+    },
+
+    async changePassword(currentPassword: string, newPassword: string): Promise<void> {
+        try {
+            await api.post('/auth/change-password', { currentPassword, newPassword });
+        } catch (error) {
+            if (axios.isAxiosError(error) && error.response?.status === 404) {
+                throw new Error('Password change is not available on the deployed backend yet. Redeploy the backend, then try again.');
+            }
+            throw error;
+        }
     },
 };

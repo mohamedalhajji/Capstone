@@ -4,6 +4,7 @@ import { ActivityIndicator, Alert, KeyboardAvoidingView, Modal, Platform, Pressa
 import { RouteProp, useRoute } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../auth/AuthContext';
+import { authService } from '../services/authService';
 import { HouseMapEditor } from '../components/HouseMap';
 import { PinSetupScreen } from './AppLockScreen';
 import { useHouseMap } from '../hooks/useHouseMap';
@@ -11,8 +12,7 @@ import { useSensors } from '../hooks/useSensors';
 import { useSystemState } from '../hooks/useSystemState';
 import { useAppLock } from '../hooks/useAppLock';
 import { useSensorAliases } from '../hooks/useSensorAliases';
-import { useSimulationActions } from '../hooks/useSimulationActions';
-import { Card, CommandButton, SectionHeader, StatusBadge } from '../ui/components';
+import { Card, CommandButton, SectionHeader, SegmentedControl, StatusBadge } from '../ui/components';
 import { FadeInView } from '../ui/FadeInView';
 import { colors, spacing } from '../ui/theme';
 import { MainTabParamList } from '../navigation/MainTabs';
@@ -23,15 +23,9 @@ type WifiNetwork = {
     security: 'open' | 'secured' | string;
 };
 
-const ESP_SETUP_BASE_URL = 'http://192.168.4.1';
+type SettingsTab = 'profile' | 'application' | 'map';
 
-const simulatedSensors = [
-    { label: 'Motion', sensorName: 'motion_living_room', icon: 'motion-sensor' as const },
-    { label: 'Gas', sensorName: 'gas_kitchen', icon: 'smoke-detector-alert-outline' as const, tone: 'danger' as const },
-    { label: 'Flame', sensorName: 'flame_kitchen', icon: 'fire-alert' as const, tone: 'danger' as const },
-    { label: 'Door', sensorName: 'door_main', icon: 'door-open' as const },
-    { label: 'Vibration', sensorName: 'vibration_window', icon: 'vibrate' as const },
-];
+const ESP_SETUP_BASE_URL = 'http://192.168.4.1';
 
 async function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutMs = 8000) {
     const controller = new AbortController();
@@ -50,9 +44,7 @@ async function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutM
             }),
         ]);
     } finally {
-        if (timeout) {
-            clearTimeout(timeout);
-        }
+        if (timeout) clearTimeout(timeout);
     }
 }
 
@@ -76,9 +68,11 @@ export default function SettingsScreen() {
     const route = useRoute<RouteProp<MainTabParamList, 'Settings'>>();
     const openedWifiParamRef = React.useRef(false);
     const insets = useSafeAreaInsets();
+    const [activeTab, setActiveTab] = React.useState<SettingsTab>('profile');
     const [setupOpen, setSetupOpen] = React.useState(false);
     const [mapEditorOpen, setMapEditorOpen] = React.useState(false);
     const [pinSetupOpen, setPinSetupOpen] = React.useState(false);
+    const [pinVerifyOpen, setPinVerifyOpen] = React.useState(false);
     const [renamingSensorId, setRenamingSensorId] = React.useState<string | null>(null);
     const [sensorName, setSensorName] = React.useState('');
     const [setupStarted, setSetupStarted] = React.useState(false);
@@ -90,13 +84,13 @@ export default function SettingsScreen() {
     const [scanStatus, setScanStatus] = React.useState<string | null>(null);
     const [manualEntry, setManualEntry] = React.useState(false);
     const [savingWifi, setSavingWifi] = React.useState(false);
+    const [passwordFlowOpen, setPasswordFlowOpen] = React.useState(false);
     const { user, logout } = useAuth();
     const { data: systemState, requestEspWifiReset, requestingEspWifiReset, fullReset, fullResetting } = useSystemState();
     const { data: sensors } = useSensors();
     const { layout: houseMap, setLayout: setHouseMap } = useHouseMap(user?.id);
     const { settings: lockSettings, biometricSupported, saveSettings, authenticateBiometric } = useAppLock(user?.id);
     const { aliases, setAlias } = useSensorAliases(user?.id);
-    const { triggerSensor, simulateNfc, isLoading: simulatingAction } = useSimulationActions();
     const systemLastSeenMs = systemState?.espLastSeen ? new Date(systemState.espLastSeen).getTime() : 0;
     const systemWifiConnected = systemLastSeenMs > 0 && Date.now() - systemLastSeenMs < 15000;
     const requireWifiSetup = !!route.params?.requireWifiSetup;
@@ -149,9 +143,7 @@ export default function SettingsScreen() {
                     ? `Found ${validNetworks.length} networks${usedFallback ? ' using fallback scan' : ''}.`
                     : 'Scan finished, but no visible 2.4 GHz networks were returned.'
             );
-            if (!ssid && validNetworks[0]?.ssid) {
-                setSsid(validNetworks[0].ssid);
-            }
+            if (!ssid && validNetworks[0]?.ssid) setSsid(validNetworks[0].ssid);
             setManualEntry(false);
         } catch (error) {
             setNetworks([]);
@@ -172,6 +164,7 @@ export default function SettingsScreen() {
     React.useEffect(() => {
         if (route.params?.openWifiSetup && !openedWifiParamRef.current) {
             openedWifiParamRef.current = true;
+            setActiveTab('application');
             setSetupStarted(true);
             setSetupOpen(true);
             setManualEntry(false);
@@ -220,6 +213,11 @@ export default function SettingsScreen() {
             }
 
             setSetupOpen(false);
+            setSetupStarted(false);
+            setNetworks([]);
+            setScanError(null);
+            setScanStatus(null);
+            setManualEntry(false);
             setWifiPassword('');
             Alert.alert('Wi-Fi connected', payload.message || 'The system is restarting and will connect to the new network.');
         } catch (error) {
@@ -263,221 +261,152 @@ export default function SettingsScreen() {
         );
     };
 
-    const runDevAction = async (action: () => Promise<unknown>, successMessage: string) => {
-        try {
-            await action();
-            Alert.alert('Done', successMessage);
-        } catch (error) {
-            Alert.alert('Action failed', error instanceof Error ? error.message : 'Unknown error');
+    const openPinChange = () => {
+        if (lockSettings.pin) {
+            setPinVerifyOpen(true);
+            return;
         }
+        setPinSetupOpen(true);
     };
 
     return (
         <FadeInView>
             <ScrollView contentContainerStyle={{ padding: spacing.page, gap: spacing.gap, backgroundColor: colors.background }}>
-                <Card>
-                    <SectionHeader
-                        icon="floor-plan"
-                        title="Home Map"
-                        subtitle={houseMap.rooms.length > 0 ? 'Edit rooms and linked sensors.' : 'Create the optional blueprint whenever you want.'}
-                    />
-                    <CommandButton
-                        label={houseMap.rooms.length > 0 ? 'Edit Map' : 'Create Map'}
-                        icon="map-marker-path"
-                        tone="primary"
-                        onPress={() => {
-                            setHouseMap({ ...houseMap, promptState: 'accepted' })
-                                .then(() => setMapEditorOpen(true))
-                                .catch((error) => {
-                                    Alert.alert('Could not open map', error instanceof Error ? error.message : 'Unknown error');
-                                });
-                        }}
-                    />
-                    <Text style={{ color: colors.text, fontWeight: '900', marginTop: 4 }}>Sensors</Text>
-                    {sensors && sensors.length > 0 ? (
-                        sensors.map((sensor) => (
-                            <Pressable
-                                key={sensor.id}
-                                onPress={() => {
-                                    setRenamingSensorId(sensor.id);
-                                    setSensorName(aliases[sensor.id] || sensor.label);
-                                }}
-                                style={{ minHeight: 46, flexDirection: 'row', alignItems: 'center', gap: 10 }}
-                            >
-                                <MaterialCommunityIcons name="radar" size={20} color={colors.primary} />
-                                <View style={{ flex: 1 }}>
-                                    <Text style={{ color: colors.text, fontWeight: '900' }}>{aliases[sensor.id] || sensor.label}</Text>
-                                    <Text style={{ color: colors.muted, fontSize: 12 }}>{sensor.location}</Text>
-                                </View>
-                                <MaterialCommunityIcons name="pencil-outline" size={18} color={colors.muted} />
-                            </Pressable>
-                        ))
-                    ) : (
-                        <Text style={{ color: colors.muted }}>No sensors detected yet.</Text>
-                    )}
-                </Card>
+                <SegmentedControl
+                    value={activeTab}
+                    onChange={setActiveTab}
+                    options={[
+                        { value: 'profile', label: 'Profile', icon: 'account-circle-outline' },
+                        { value: 'application', label: 'Application', icon: 'cellphone-cog' },
+                        { value: 'map', label: 'Home Map', icon: 'floor-plan' },
+                    ]}
+                />
 
-                <Card>
-                    <SectionHeader icon="delete-sweep-outline" title="Clear History" subtitle="Clear history and reset the system state." />
-                    <CommandButton
-                        label="Clear and Reset"
-                        icon="delete-outline"
-                        tone="danger"
-                        disabled={fullResetting}
-                        onPress={() =>
-                            Alert.alert('Clear data and reset?', 'This clears history and stops active alerts.', [
-                                { text: 'Cancel', style: 'cancel' },
-                                {
-                                    text: 'Clear',
-                                    style: 'destructive',
-                                    onPress: () => {
-                                        fullReset().catch((error) => {
-                                            Alert.alert('Clear failed', error instanceof Error ? error.message : 'Unknown error');
-                                        });
-                                    },
-                                },
-                            ])
-                        }
-                    />
-                </Card>
+                {activeTab === 'profile' && (
+                    <ProfileTab userName={user?.name} email={user?.email} onChangePassword={() => setPasswordFlowOpen(true)} logout={logout} />
+                )}
 
-                <Card>
-                    <SectionHeader icon="lock-outline" title="App Lock" subtitle="Require biometrics or a 6 digit PIN when opening the app." />
-                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
-                        <CommandButton
-                            label={lockSettings.pin ? 'Change PIN' : 'Use PIN'}
-                            icon="numeric"
-                            tone={lockSettings.method === 'pin' ? 'primary' : 'default'}
-                            onPress={() => setPinSetupOpen(true)}
-                        />
-                        <CommandButton
-                            label="Biometrics"
-                            icon="fingerprint"
-                            tone={lockSettings.method === 'biometric' ? 'primary' : 'default'}
-                            onPress={() => {
-                                if (!biometricSupported) {
-                                    Alert.alert('Biometrics unavailable', 'Face ID or Touch ID is not available or not enrolled on this device.');
-                                    return;
-                                }
-                                authenticateBiometric()
-                                    .then((result) => {
-                                        if (!result.success) {
-                                            Alert.alert(
-                                                'Face ID did not start',
-                                                result.warning || result.error || 'The biometric prompt was canceled or unavailable.'
-                                            );
+                {activeTab === 'application' && (
+                    <>
+                        <Card>
+                            <SectionHeader icon="lock-outline" title="App Lock" subtitle="Require biometrics or a 6 digit PIN when opening the app." />
+                            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+                                <CommandButton
+                                    label={lockSettings.pin ? 'Change PIN' : 'Use PIN'}
+                                    icon="numeric"
+                                    tone={lockSettings.method === 'pin' ? 'primary' : 'default'}
+                                    onPress={openPinChange}
+                                />
+                                <CommandButton
+                                    label="Biometrics"
+                                    icon="fingerprint"
+                                    tone={lockSettings.method === 'biometric' ? 'primary' : 'default'}
+                                    onPress={() => {
+                                        if (!biometricSupported) {
+                                            Alert.alert('Biometrics unavailable', 'Face ID or Touch ID is not available or not enrolled on this device.');
                                             return;
                                         }
-                                        return saveSettings({ ...lockSettings, enabled: true, method: 'biometric' });
-                                    })
-                                    .catch((error) => {
-                                        Alert.alert('Could not enable biometrics', error instanceof Error ? error.message : 'Unknown error');
-                                    });
-                            }}
-                        />
-                    </View>
-                    {!biometricSupported && (
-                        <Text style={{ color: colors.muted, lineHeight: 19 }}>
-                            Biometrics are unavailable on this device, so PIN lock is required.
-                        </Text>
-                    )}
-                </Card>
+                                        authenticateBiometric()
+                                            .then((result) => {
+                                                if (!result.success) {
+                                                    Alert.alert(
+                                                        'Face ID did not start',
+                                                        result.warning || result.error || 'The biometric prompt was canceled or unavailable.'
+                                                    );
+                                                    return;
+                                                }
+                                                return saveSettings({ ...lockSettings, enabled: true, method: 'biometric' });
+                                            })
+                                            .catch((error) => {
+                                                Alert.alert('Could not enable biometrics', error instanceof Error ? error.message : 'Unknown error');
+                                            });
+                                    }}
+                                />
+                            </View>
+                            {!biometricSupported && (
+                                <Text style={{ color: colors.muted, lineHeight: 19 }}>
+                                    Biometrics are unavailable on this device, so PIN lock is required.
+                                </Text>
+                            )}
+                        </Card>
 
-                <Card>
-                    <SectionHeader icon="account-circle-outline" title="Account" />
-                    <Text style={{ color: colors.text, fontWeight: '900', fontSize: 16 }}>{user?.name}</Text>
-                    <Text style={{ color: colors.muted }}>{user?.email}</Text>
-                    <CommandButton
-                        label="Logout"
-                        icon="logout"
-                        tone="danger"
-                        onPress={() => {
-                            Alert.alert('Log out?', 'You will need to sign in again to access this account.', [
-                                { text: 'Cancel', style: 'cancel' },
-                                {
-                                    text: 'Logout',
-                                    style: 'destructive',
-                                    onPress: () => {
-                                        logout().catch((error) => {
-                                            Alert.alert('Logout failed', error instanceof Error ? error.message : 'Unknown error');
-                                        });
-                                    },
-                                },
-                            ]);
+                        <Card>
+                            <SectionHeader icon="wifi-cog" title="System Wi-Fi" />
+                            <StatusBadge label={systemWifiConnected ? 'CONNECTED' : 'SETUP'} color={systemWifiConnected ? colors.success : colors.warning} />
+                            <Text style={{ color: colors.muted, lineHeight: 19 }}>
+                                Use this when moving the system to a new router or Wi-Fi network.
+                            </Text>
+                            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+                                <CommandButton
+                                    label={systemWifiConnected || setupStarted ? 'Change Wi-Fi' : 'Start Setup'}
+                                    icon="wifi-cog"
+                                    tone="danger"
+                                    disabled={requestingEspWifiReset}
+                                    onPress={confirmEspWifiReset}
+                                />
+                                {setupStarted && (
+                                    <CommandButton
+                                        label="Change Wi-Fi"
+                                        icon="wifi-settings"
+                                        tone="primary"
+                                        onPress={() => {
+                                            setSetupOpen(true);
+                                            setManualEntry(false);
+                                            setScanError(null);
+                                            setScanStatus(null);
+                                            setNetworks([]);
+                                        }}
+                                    />
+                                )}
+                            </View>
+                            {setupStarted && (
+                                <Text style={{ color: colors.muted, lineHeight: 19 }}>
+                                    Setup is active. Connect this phone to Home Security System before opening Change Wi-Fi.
+                                </Text>
+                            )}
+                        </Card>
+
+                        <Card>
+                            <SectionHeader icon="delete-sweep-outline" title="Clear History" subtitle="Clear history and reset the system state." />
+                            <CommandButton
+                                label="Clear and Reset"
+                                icon="delete-outline"
+                                tone="danger"
+                                disabled={fullResetting}
+                                onPress={() =>
+                                    Alert.alert('Clear data and reset?', 'This clears history and stops active alerts.', [
+                                        { text: 'Cancel', style: 'cancel' },
+                                        {
+                                            text: 'Clear',
+                                            style: 'destructive',
+                                            onPress: () => {
+                                                fullReset().catch((error) => {
+                                                    Alert.alert('Clear failed', error instanceof Error ? error.message : 'Unknown error');
+                                                });
+                                            },
+                                        },
+                                    ])
+                                }
+                            />
+                        </Card>
+                    </>
+                )}
+
+                {activeTab === 'map' && (
+                    <HomeMapTab
+                        sensors={sensors}
+                        aliases={aliases}
+                        houseMap={houseMap}
+                        setHouseMap={setHouseMap}
+                        onOpenEditor={() => setMapEditorOpen(true)}
+                        onRename={(sensorId, name) => {
+                            setRenamingSensorId(sensorId);
+                            setSensorName(name);
                         }}
                     />
-                </Card>
-
-                <Card>
-                    <SectionHeader icon="tools" title="Developer Tools" subtitle="Temporary simulation controls for testing." />
-                    <Text style={{ color: colors.text, fontWeight: '900' }}>Sensor Tests</Text>
-                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
-                        {simulatedSensors.map((item) => (
-                            <CommandButton
-                                key={item.sensorName}
-                                label={item.label}
-                                icon={item.icon}
-                                tone={item.tone}
-                                disabled={simulatingAction}
-                                onPress={() => runDevAction(() => triggerSensor(item.sensorName), `${item.label} event sent.`)}
-                            />
-                        ))}
-                    </View>
-                    <Text style={{ color: colors.text, fontWeight: '900' }}>NFC Tests</Text>
-                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
-                        <CommandButton
-                            label="Granted"
-                            icon="account-check-outline"
-                            tone="primary"
-                            disabled={simulatingAction}
-                            onPress={() => runDevAction(() => simulateNfc('authorized'), 'Authorized NFC event sent.')}
-                        />
-                        <CommandButton
-                            label="Denied"
-                            icon="account-cancel-outline"
-                            tone="danger"
-                            disabled={simulatingAction}
-                            onPress={() => runDevAction(() => simulateNfc('unauthorized'), 'Denied NFC event sent.')}
-                        />
-                    </View>
-                </Card>
-
-                <Card>
-                    <SectionHeader icon="wifi-cog" title="System Wi-Fi" />
-                    <StatusBadge label={systemWifiConnected ? 'CONNECTED' : 'SETUP'} color={systemWifiConnected ? colors.success : colors.warning} />
-                    <Text style={{ color: colors.muted, lineHeight: 19 }}>
-                        Use this when moving the system to a new router or Wi-Fi network.
-                    </Text>
-                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
-                        <CommandButton
-                            label={systemWifiConnected || setupStarted ? 'Change Wi-Fi' : 'Start Setup'}
-                            icon="wifi-cog"
-                            tone="danger"
-                            disabled={requestingEspWifiReset}
-                            onPress={confirmEspWifiReset}
-                        />
-                        {setupStarted && (
-                            <CommandButton
-                                label="Change Wi-Fi"
-                                icon="wifi-settings"
-                                tone="primary"
-                                onPress={() => {
-                                    setSetupOpen(true);
-                                    setManualEntry(false);
-                                    setScanError(null);
-                                    setScanStatus(null);
-                                    setNetworks([]);
-                                }}
-                            />
-                        )}
-                    </View>
-                    {setupStarted && (
-                        <Text style={{ color: colors.muted, lineHeight: 19 }}>
-                            Setup is active. Connect this phone to Home Security System before opening Change Wi-Fi.
-                        </Text>
-                    )}
-                </Card>
+                )}
             </ScrollView>
+
             <HouseMapEditor
                 visible={mapEditorOpen}
                 layout={houseMap}
@@ -489,9 +418,22 @@ export default function SettingsScreen() {
                 }}
                 onClose={() => setMapEditorOpen(false)}
             />
+
+            <PasswordFlowModal visible={passwordFlowOpen} email={user?.email} onClose={() => setPasswordFlowOpen(false)} />
+
+            <PinVerifyModal
+                visible={pinVerifyOpen}
+                expectedPin={lockSettings.pin}
+                onClose={() => setPinVerifyOpen(false)}
+                onVerified={() => {
+                    setPinVerifyOpen(false);
+                    setPinSetupOpen(true);
+                }}
+            />
+
             <Modal visible={pinSetupOpen} animationType="slide" onRequestClose={() => setPinSetupOpen(false)}>
                 <PinSetupScreen
-                    title={lockSettings.pin ? 'Change PIN' : 'Create PIN'}
+                    title={lockSettings.pin ? 'New PIN' : 'Create PIN'}
                     onCancel={() => setPinSetupOpen(false)}
                     onComplete={(nextPin) =>
                         saveSettings({ enabled: true, method: 'pin', pin: nextPin }).then(() => {
@@ -500,6 +442,7 @@ export default function SettingsScreen() {
                     }
                 />
             </Modal>
+
             <Modal visible={!!renamingSensorId} transparent animationType="fade" onRequestClose={() => setRenamingSensorId(null)}>
                 <View style={{ flex: 1, backgroundColor: '#00000099', justifyContent: 'center', padding: spacing.page }}>
                     <View style={{ backgroundColor: colors.surface, borderRadius: 8, padding: spacing.card, gap: 12 }}>
@@ -509,16 +452,7 @@ export default function SettingsScreen() {
                             onChangeText={setSensorName}
                             placeholder="Sensor name"
                             placeholderTextColor={colors.muted}
-                            style={{
-                                backgroundColor: colors.surfaceAlt,
-                                color: colors.text,
-                                borderWidth: 1,
-                                borderColor: colors.border,
-                                borderRadius: 8,
-                                paddingHorizontal: 14,
-                                paddingVertical: 13,
-                                fontWeight: '800',
-                            }}
+                            style={inputStyle()}
                         />
                         <View style={{ flexDirection: 'row', gap: 10 }}>
                             <CommandButton label="Cancel" icon="close" onPress={() => setRenamingSensorId(null)} />
@@ -537,6 +471,7 @@ export default function SettingsScreen() {
                     </View>
                 </View>
             </Modal>
+
             <Modal visible={setupOpen} animationType="slide" onRequestClose={() => !requireWifiSetup && setSetupOpen(false)}>
                 <View style={{ flex: 1, backgroundColor: colors.background, paddingTop: Math.max(insets.top + spacing.page, 78) }}>
                     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
@@ -651,7 +586,7 @@ export default function SettingsScreen() {
                                                         <View style={{ flex: 1 }}>
                                                             <Text style={{ color: colors.text, fontWeight: '900' }}>{network.ssid}</Text>
                                                             <Text style={{ color: colors.muted, marginTop: 2 }}>
-                                                                {network.security === 'open' ? 'Open' : 'Secured'} · {network.rssi} dBm
+                                                                {network.security === 'open' ? 'Open' : 'Secured'} - {network.rssi} dBm
                                                             </Text>
                                                         </View>
                                                         {selected && <MaterialCommunityIcons name="check-circle" size={22} color={colors.primary} />}
@@ -672,16 +607,7 @@ export default function SettingsScreen() {
                                             placeholderTextColor={colors.muted}
                                             autoCapitalize="none"
                                             autoCorrect={false}
-                                            style={{
-                                                backgroundColor: colors.surfaceAlt,
-                                                color: colors.text,
-                                                borderWidth: 1,
-                                                borderColor: colors.border,
-                                                borderRadius: 8,
-                                                paddingHorizontal: 14,
-                                                paddingVertical: 13,
-                                                fontWeight: '700',
-                                            }}
+                                            style={inputStyle()}
                                         />
                                     </View>
                                 )}
@@ -697,12 +623,10 @@ export default function SettingsScreen() {
                                         autoCapitalize="none"
                                         autoCorrect={false}
                                         style={{
+                                            ...inputStyle(),
                                             backgroundColor: '#062A4F',
-                                            color: colors.text,
                                             borderWidth: 2,
                                             borderColor: colors.primary,
-                                            borderRadius: 8,
-                                            paddingHorizontal: 14,
                                             paddingVertical: 15,
                                             fontWeight: '800',
                                         }}
@@ -723,4 +647,286 @@ export default function SettingsScreen() {
             </Modal>
         </FadeInView>
     );
+}
+
+function ProfileTab({
+    userName,
+    email,
+    onChangePassword,
+    logout,
+}: {
+    userName?: string;
+    email?: string;
+    onChangePassword: () => void;
+    logout: () => Promise<void>;
+}) {
+    return (
+        <>
+            <Card>
+                <SectionHeader icon="account-circle-outline" title="Profile" />
+                <View style={{ gap: 4 }}>
+                    <Text style={{ color: colors.text, fontSize: 20, fontWeight: '900' }}>{userName}</Text>
+                    <Text style={{ color: colors.muted, fontSize: 15 }}>{email}</Text>
+                </View>
+                <CommandButton label="Change Password" icon="lock-reset" tone="primary" onPress={onChangePassword} />
+            </Card>
+
+            <Card>
+                <SectionHeader icon="logout" title="Session" />
+                <CommandButton
+                    label="Logout"
+                    icon="logout"
+                    tone="danger"
+                    onPress={() => {
+                        Alert.alert('Are you sure you want to logout?', 'You will need to sign in again to access this account.', [
+                            { text: 'Cancel', style: 'cancel' },
+                            {
+                                text: 'Logout',
+                                style: 'destructive',
+                                onPress: () => {
+                                    logout().catch((error) => {
+                                        Alert.alert('Logout failed', error instanceof Error ? error.message : 'Unknown error');
+                                    });
+                                },
+                            },
+                        ]);
+                    }}
+                />
+            </Card>
+        </>
+    );
+}
+
+function HomeMapTab({
+    sensors,
+    aliases,
+    houseMap,
+    setHouseMap,
+    onOpenEditor,
+    onRename,
+}: {
+    sensors: ReturnType<typeof useSensors>['data'];
+    aliases: Record<string, string>;
+    houseMap: ReturnType<typeof useHouseMap>['layout'];
+    setHouseMap: ReturnType<typeof useHouseMap>['setLayout'];
+    onOpenEditor: () => void;
+    onRename: (sensorId: string, name: string) => void;
+}) {
+    return (
+        <Card>
+            <SectionHeader
+                icon="floor-plan"
+                title="Home Map"
+                subtitle={houseMap.rooms.length > 0 ? 'Edit rooms and linked sensors.' : 'Create the optional blueprint whenever you want.'}
+            />
+            <CommandButton
+                label={houseMap.rooms.length > 0 ? 'Edit Map' : 'Create Map'}
+                icon="map-marker-path"
+                tone="primary"
+                onPress={() => {
+                    setHouseMap({ ...houseMap, promptState: 'accepted' })
+                        .then(onOpenEditor)
+                        .catch((error) => {
+                            Alert.alert('Could not open map', error instanceof Error ? error.message : 'Unknown error');
+                        });
+                }}
+            />
+            <Text style={{ color: colors.text, fontWeight: '900', marginTop: 4 }}>Sensors</Text>
+            {sensors && sensors.length > 0 ? (
+                sensors.map((sensor) => (
+                    <Pressable
+                        key={sensor.id}
+                        onPress={() => onRename(sensor.id, aliases[sensor.id] || sensor.label)}
+                        style={{ minHeight: 46, flexDirection: 'row', alignItems: 'center', gap: 10 }}
+                    >
+                        <MaterialCommunityIcons name="radar" size={20} color={colors.primary} />
+                        <View style={{ flex: 1 }}>
+                            <Text style={{ color: colors.text, fontWeight: '900' }}>{aliases[sensor.id] || sensor.label}</Text>
+                            <Text style={{ color: colors.muted, fontSize: 12 }}>{sensor.location}</Text>
+                        </View>
+                        <MaterialCommunityIcons name="pencil-outline" size={18} color={colors.muted} />
+                    </Pressable>
+                ))
+            ) : (
+                <Text style={{ color: colors.muted }}>No sensors detected yet.</Text>
+            )}
+        </Card>
+    );
+}
+
+function PasswordFlowModal({ visible, email, onClose }: { visible: boolean; email?: string; onClose: () => void }) {
+    const [step, setStep] = React.useState<'verify' | 'new'>('verify');
+    const [currentPassword, setCurrentPassword] = React.useState('');
+    const [newPassword, setNewPassword] = React.useState('');
+    const [confirmPassword, setConfirmPassword] = React.useState('');
+    const [saving, setSaving] = React.useState(false);
+
+    React.useEffect(() => {
+        if (!visible) {
+            setStep('verify');
+            setCurrentPassword('');
+            setNewPassword('');
+            setConfirmPassword('');
+            setSaving(false);
+        }
+    }, [visible]);
+
+    const verify = async () => {
+        if (!currentPassword) {
+            Alert.alert('Password required', 'Enter your current password.');
+            return;
+        }
+        setSaving(true);
+        try {
+            if (!email) throw new Error('No account email found.');
+            await authService.verifyPassword(email, currentPassword);
+            setStep('new');
+        } catch (error) {
+            Alert.alert('Could not verify password', error instanceof Error ? error.message : 'Unknown error');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const save = async () => {
+        if (newPassword.length < 6) {
+            Alert.alert('Password too short', 'Password must be at least 6 characters.');
+            return;
+        }
+        if (newPassword !== confirmPassword) {
+            Alert.alert('Passwords do not match', 'Enter the same new password twice.');
+            return;
+        }
+        setSaving(true);
+        try {
+            await authService.changePassword(currentPassword, newPassword);
+            Alert.alert('Password changed', 'Your account password has been updated.');
+            onClose();
+        } catch (error) {
+            Alert.alert('Could not change password', error instanceof Error ? error.message : 'Unknown error');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    return (
+        <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
+            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, backgroundColor: colors.background }}>
+                <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', padding: spacing.page, gap: spacing.gap }}>
+                    <Pressable onPress={onClose} style={{ position: 'absolute', left: spacing.page, top: 60, padding: 10 }}>
+                        <MaterialCommunityIcons name="close" size={26} color={colors.text} />
+                    </Pressable>
+                    <Card>
+                        <SectionHeader icon="lock-reset" title={step === 'verify' ? 'Current Password' : 'New Password'} />
+                        {step === 'verify' ? (
+                            <>
+                                <Text style={{ color: colors.muted, lineHeight: 19 }}>Enter your current password to continue.</Text>
+                                <TextInput
+                                    value={currentPassword}
+                                    onChangeText={setCurrentPassword}
+                                    placeholder="Current password"
+                                    placeholderTextColor={colors.muted}
+                                    secureTextEntry
+                                    autoCapitalize="none"
+                                    autoCorrect={false}
+                                    style={inputStyle()}
+                                />
+                                <CommandButton label={saving ? 'Checking...' : 'Continue'} icon="arrow-right" tone="primary" disabled={saving} onPress={verify} />
+                            </>
+                        ) : (
+                            <>
+                                <TextInput
+                                    value={newPassword}
+                                    onChangeText={setNewPassword}
+                                    placeholder="New password"
+                                    placeholderTextColor={colors.muted}
+                                    secureTextEntry
+                                    autoCapitalize="none"
+                                    autoCorrect={false}
+                                    style={inputStyle()}
+                                />
+                                <TextInput
+                                    value={confirmPassword}
+                                    onChangeText={setConfirmPassword}
+                                    placeholder="Confirm new password"
+                                    placeholderTextColor={colors.muted}
+                                    secureTextEntry
+                                    autoCapitalize="none"
+                                    autoCorrect={false}
+                                    style={inputStyle()}
+                                />
+                                <CommandButton label={saving ? 'Saving...' : 'Save Password'} icon="content-save" tone="primary" disabled={saving} onPress={save} />
+                            </>
+                        )}
+                    </Card>
+                </ScrollView>
+            </KeyboardAvoidingView>
+        </Modal>
+    );
+}
+
+function PinVerifyModal({
+    visible,
+    expectedPin,
+    onClose,
+    onVerified,
+}: {
+    visible: boolean;
+    expectedPin?: string;
+    onClose: () => void;
+    onVerified: () => void;
+}) {
+    const [pin, setPin] = React.useState('');
+
+    React.useEffect(() => {
+        if (!visible) setPin('');
+    }, [visible]);
+
+    const verify = () => {
+        if (pin !== expectedPin) {
+            Alert.alert('Incorrect PIN', 'Enter your current PIN first.');
+            setPin('');
+            return;
+        }
+        onVerified();
+    };
+
+    return (
+        <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
+            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, backgroundColor: colors.background }}>
+                <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', padding: spacing.page, gap: spacing.gap }}>
+                    <Pressable onPress={onClose} style={{ position: 'absolute', left: spacing.page, top: 60, padding: 10 }}>
+                        <MaterialCommunityIcons name="close" size={26} color={colors.text} />
+                    </Pressable>
+                    <Card>
+                        <SectionHeader icon="numeric" title="Current PIN" subtitle="Enter your current PIN before choosing a new one." />
+                        <TextInput
+                            value={pin}
+                            onChangeText={(value) => setPin(value.replace(/\D/g, '').slice(0, 6))}
+                            placeholder="Current PIN"
+                            placeholderTextColor={colors.muted}
+                            keyboardType="number-pad"
+                            secureTextEntry
+                            maxLength={6}
+                            style={inputStyle()}
+                        />
+                        <CommandButton label="Continue" icon="arrow-right" tone="primary" onPress={verify} />
+                    </Card>
+                </ScrollView>
+            </KeyboardAvoidingView>
+        </Modal>
+    );
+}
+
+function inputStyle() {
+    return {
+        backgroundColor: colors.surfaceAlt,
+        color: colors.text,
+        borderWidth: 1,
+        borderColor: colors.border,
+        borderRadius: 8,
+        paddingHorizontal: 14,
+        paddingVertical: 13,
+        fontWeight: '700' as const,
+    };
 }
