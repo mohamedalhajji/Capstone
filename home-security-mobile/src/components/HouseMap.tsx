@@ -32,9 +32,9 @@ const allRoomOptions = [...roomOptions, ...legacyRoomOptions];
 const uniqueRoomTypes = new Set<RoomType>(['main_door', 'back_door']);
 
 const devDevices: MappedDevice[] = [
-    { id: 'dev-motion-living', label: 'Dev motion', type: 'motion', status: 'idle', location: 'Living Room' },
-    { id: 'dev-gas-kitchen', label: 'Dev gas', type: 'gas', status: 'warning', location: 'Kitchen' },
-    { id: 'dev-door-main', label: 'Dev door', type: 'door', status: 'safe', location: 'Entrance' },
+    { id: 'dev-motion-hallway', label: 'Hallway Motion Sensor', type: 'motion', status: 'idle', location: 'Hallway' },
+    { id: 'dev-gas-kitchen', label: 'Kitchen Gas Sensor', type: 'gas', status: 'warning', location: 'Kitchen' },
+    { id: 'dev-window-1', label: 'Window 1 Sensor', type: 'door', status: 'safe', location: 'Window 1' },
     { id: 'dev-sprinkler', label: 'Dev sprinkler', type: 'sprinkler', status: 'idle', location: 'Kitchen' },
 ];
 

@@ -70,16 +70,26 @@ WHERE id = 1
 
 INSERT INTO sensors (sensor_name, sensor_type, location)
 VALUES
-  ('motion_living_room', 'motion', 'Living Room'),
+  ('motion_hallway', 'motion', 'Hallway'),
+  ('motion_garage', 'motion', 'Garage'),
   ('gas_kitchen', 'gas', 'Kitchen'),
+  ('gas_hallway', 'gas', 'Hallway'),
+  ('gas_living_room', 'gas', 'Living Room'),
   ('flame_kitchen', 'flame', 'Kitchen'),
-  ('door_main', 'door', 'Main Door'),
-  ('vibration_window', 'vibration', 'Window'),
+  ('flame_room_1', 'flame', 'Room 1'),
+  ('flame_room_2', 'flame', 'Room 2'),
+  ('window_1_reed', 'door', 'Window 1'),
+  ('window_2_reed', 'door', 'Window 2'),
+  ('window_3_reed', 'door', 'Window 3'),
+  ('vibration_garage_door', 'vibration', 'Garage Door'),
   ('nfc_main_door', 'nfc', 'Main Door')
 ON CONFLICT (sensor_name) DO UPDATE
 SET sensor_type = EXCLUDED.sensor_type,
     location = EXCLUDED.location,
     updated_at = CURRENT_TIMESTAMP;
+
+DELETE FROM sensors
+WHERE sensor_name IN ('motion_living_room', 'smoke_kitchen', 'smoke_hallway', 'smoke_living_room', 'door_main', 'vibration_window');
 
 CREATE INDEX IF NOT EXISTS idx_events_created_at ON events(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_notifications_created_at ON notifications(created_at DESC);

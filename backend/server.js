@@ -18,13 +18,49 @@ let memoryAccessLogId = 1;
 let memoryUserId = 1;
 
 const memorySensors = [
-  { id: 1, sensor_name: "motion_living_room", sensor_type: "motion", location: "Living Room", status: "idle", last_value: null },
-  { id: 2, sensor_name: "gas_kitchen", sensor_type: "gas", location: "Kitchen", status: "idle", last_value: null },
-  { id: 3, sensor_name: "flame_kitchen", sensor_type: "flame", location: "Kitchen", status: "idle", last_value: null },
-  { id: 4, sensor_name: "door_main", sensor_type: "door", location: "Main Door", status: "idle", last_value: null },
-  { id: 5, sensor_name: "vibration_window", sensor_type: "vibration", location: "Window", status: "idle", last_value: null },
-  { id: 6, sensor_name: "nfc_main_door", sensor_type: "nfc", location: "Main Door", status: "idle", last_value: null },
+  { id: 1, sensor_name: "motion_hallway", sensor_type: "motion", location: "Hallway", status: "idle", last_value: null },
+  { id: 2, sensor_name: "motion_garage", sensor_type: "motion", location: "Garage", status: "idle", last_value: null },
+  { id: 3, sensor_name: "gas_kitchen", sensor_type: "gas", location: "Kitchen", status: "idle", last_value: null },
+  { id: 4, sensor_name: "gas_hallway", sensor_type: "gas", location: "Hallway", status: "idle", last_value: null },
+  { id: 5, sensor_name: "gas_living_room", sensor_type: "gas", location: "Living Room", status: "idle", last_value: null },
+  { id: 6, sensor_name: "flame_kitchen", sensor_type: "flame", location: "Kitchen", status: "idle", last_value: null },
+  { id: 7, sensor_name: "flame_room_1", sensor_type: "flame", location: "Room 1", status: "idle", last_value: null },
+  { id: 8, sensor_name: "flame_room_2", sensor_type: "flame", location: "Room 2", status: "idle", last_value: null },
+  { id: 9, sensor_name: "window_1_reed", sensor_type: "door", location: "Window 1", status: "idle", last_value: null },
+  { id: 10, sensor_name: "window_2_reed", sensor_type: "door", location: "Window 2", status: "idle", last_value: null },
+  { id: 11, sensor_name: "window_3_reed", sensor_type: "door", location: "Window 3", status: "idle", last_value: null },
+  { id: 12, sensor_name: "vibration_garage_door", sensor_type: "vibration", location: "Garage Door", status: "idle", last_value: null },
+  { id: 13, sensor_name: "nfc_main_door", sensor_type: "nfc", location: "Main Door", status: "idle", last_value: null },
 ];
+
+const legacySensorAliases = {
+  motion_living_room: {
+    sensorType: "motion",
+    location: "Hallway/Garage",
+    sensorLabel: "Grouped Motion Sensors",
+  },
+  gas_kitchen: {
+    sensorType: "gas",
+    location: "Kitchen/Hallway/Living Room",
+    sensorLabel: "Grouped Gas Sensors",
+  },
+  flame_kitchen: {
+    sensorType: "flame",
+    location: "Kitchen/Room 1/Room 2",
+    sensorLabel: "Grouped Flame Sensors",
+  },
+  door_main: {
+    sensorType: "door",
+    location: "Window 1/Window 2/Window 3",
+    sensorLabel: "Grouped Window Sensors",
+  },
+  vibration_window: {
+    sensorName: "vibration_garage_door",
+    sensorType: "vibration",
+    location: "Garage Door",
+    sensorLabel: "Garage Door Vibration Sensor",
+  },
+};
 
 const memoryState = {
   id: 1,
@@ -281,30 +317,44 @@ async function processSensorEvent(sensorName, source = "simulation") {
     throw error;
   }
 
+  const incomingSensorName = String(sensorName);
+  const legacyAlias = legacySensorAliases[incomingSensorName];
+  const lookupSensorName = legacyAlias?.sensorName || incomingSensorName;
   let sensor;
 
-  try {
-    const sensorResult = await pool.query(
-      "SELECT * FROM sensors WHERE sensor_name = $1 LIMIT 1",
-      [sensorName]
-    );
+  if (lookupSensorName) {
+    try {
+      const sensorResult = await pool.query(
+        "SELECT * FROM sensors WHERE sensor_name = $1 LIMIT 1",
+        [lookupSensorName]
+      );
 
-    if (sensorResult.rows.length === 0) {
+      if (sensorResult.rows.length === 0) {
+        const error = new Error("Sensor not found");
+        error.statusCode = 404;
+        throw error;
+      }
+
+      sensor = sensorResult.rows[0];
+    } catch (error) {
+      if (!isDbUnavailable(error)) throw error;
+      sensor = memorySensors.find((item) => item.sensor_name === lookupSensorName);
+    }
+  }
+
+  if (!sensor) {
+    if (!legacyAlias) {
       const error = new Error("Sensor not found");
       error.statusCode = 404;
       throw error;
     }
 
-    sensor = sensorResult.rows[0];
-  } catch (error) {
-    if (!isDbUnavailable(error)) throw error;
-    sensor = memorySensors.find((item) => item.sensor_name === sensorName);
-  }
-
-  if (!sensor) {
-    const error = new Error("Sensor not found");
-    error.statusCode = 404;
-    throw error;
+    sensor = {
+      id: null,
+      sensor_name: incomingSensorName,
+      sensor_type: legacyAlias.sensorType,
+      location: legacyAlias.location,
+    };
   }
 
   const systemState = await getSystemState();
@@ -313,6 +363,8 @@ async function processSensorEvent(sensorName, source = "simulation") {
   const isDisarmed = mode === "disarmed";
   const isHome = mode === "home";
   const isAway = mode === "away";
+  const eventLocation = legacyAlias?.location || sensor.location;
+  const isGroupedLegacyEvent = Boolean(legacyAlias && !legacyAlias.sensorName);
 
   let eventType = "";
   let severity = "low";
@@ -322,12 +374,12 @@ async function processSensorEvent(sensorName, source = "simulation") {
 
   if (sensor.sensor_type === "motion") {
     eventType = "motion_detected";
-    message = `Motion detected in ${sensor.location}`;
+    message = `Motion detected in ${eventLocation}`;
     shouldTriggerAlarm = isAway;
     severity = shouldTriggerAlarm ? "high" : "low";
   } else if (sensor.sensor_type === "door") {
     eventType = "door_breach";
-    message = `Main door opened / breached at ${sensor.location}`;
+    message = `Perimeter opened / breached at ${eventLocation}`;
     shouldTriggerAlarm = isHome || isAway;
     severity = shouldTriggerAlarm ? "high" : "low";
   } else if (
@@ -335,18 +387,18 @@ async function processSensorEvent(sensorName, source = "simulation") {
     sensor.sensor_type === "window_vibration"
   ) {
     eventType = "window_vibration_detected";
-    message = `Window vibration detected at ${sensor.location}`;
+    message = `Vibration detected at ${eventLocation}`;
     shouldTriggerAlarm = isHome || isAway;
     severity = shouldTriggerAlarm ? "high" : "low";
   } else if (sensor.sensor_type === "gas" || sensor.sensor_type === "smoke") {
     eventType = "gas_detected";
     severity = "high";
-    message = `Gas leak detected in ${sensor.location}`;
+    message = `Gas detected in ${eventLocation}`;
     shouldTriggerAlarm = true;
   } else if (sensor.sensor_type === "flame") {
     eventType = "flame_detected";
     severity = "critical";
-    message = `Fire detected in ${sensor.location}`;
+    message = `Fire detected in ${eventLocation}`;
     shouldTriggerAlarm = true;
 
     memoryState.sprinkler_on = true;
@@ -391,7 +443,9 @@ async function processSensorEvent(sensorName, source = "simulation") {
         : `buzzer activated + ${actionTaken}`;
   }
 
-  const memorySensor = memorySensors.find((item) => item.sensor_name === sensor.sensor_name);
+  const memorySensor = isGroupedLegacyEvent
+    ? null
+    : memorySensors.find((item) => item.sensor_name === sensor.sensor_name);
   if (memorySensor) {
     memorySensor.status = "triggered";
     memorySensor.last_value = eventType;
@@ -406,8 +460,8 @@ async function processSensorEvent(sensorName, source = "simulation") {
     message,
     action_taken: actionTaken,
     created_at: new Date().toISOString(),
-    sensor_name: sensor.sensor_name,
-    location: sensor.location,
+    sensor_name: legacyAlias?.sensorLabel || sensor.sensor_name,
+    location: eventLocation,
   };
 
   memoryEvents.unshift(event);
@@ -419,14 +473,16 @@ async function processSensorEvent(sensorName, source = "simulation") {
   });
 
   try {
-    await pool.query(
-      `UPDATE sensors
-       SET status = 'triggered',
-           last_value = $1,
-           updated_at = CURRENT_TIMESTAMP
-       WHERE id = $2`,
-      [eventType, sensor.id]
-    );
+    if (!isGroupedLegacyEvent) {
+      await pool.query(
+        `UPDATE sensors
+         SET status = 'triggered',
+             last_value = $1,
+             updated_at = CURRENT_TIMESTAMP
+         WHERE id = $2`,
+        [eventType, sensor.id]
+      );
+    }
 
     const eventInsert = await pool.query(
       `INSERT INTO events (sensor_id, event_type, severity, message, action_taken)
@@ -441,7 +497,11 @@ async function processSensorEvent(sensorName, source = "simulation") {
       [`Alert: ${eventType}`, `${message} [mode: ${mode}, source: ${source}]`]
     );
 
-    event = eventInsert.rows[0];
+    event = {
+      ...eventInsert.rows[0],
+      sensor_name: legacyAlias?.sensorLabel || sensor.sensor_name,
+      location: eventLocation,
+    };
   } catch (error) {
     if (!isDbUnavailable(error)) throw error;
   }

@@ -3,6 +3,21 @@ import axios from "axios";
 
 const API = import.meta.env.VITE_API_URL ?? "https://capstone-msv5.onrender.com";
 const SESSION_KEY = "home-security-web-session";
+const sensorLabels = {
+  motion_hallway: "Hallway Motion Sensor",
+  motion_garage: "Garage Motion Sensor",
+  gas_kitchen: "Kitchen Gas Sensor",
+  gas_hallway: "Hallway Gas Sensor",
+  gas_living_room: "Living Room Gas Sensor",
+  flame_kitchen: "Kitchen Flame Sensor",
+  flame_room_1: "Room 1 Flame Sensor",
+  flame_room_2: "Room 2 Flame Sensor",
+  window_1_reed: "Window 1 Sensor",
+  window_2_reed: "Window 2 Sensor",
+  window_3_reed: "Window 3 Sensor",
+  vibration_garage_door: "Garage Door Vibration Sensor",
+  nfc_main_door: "Main Door NFC Reader",
+};
 
 function App() {
   const [session, setSession] = useState(() => {
@@ -132,11 +147,18 @@ function App() {
       <Section title="Test Tools">
         <div style={styles.flex}>
           {[
-            ["motion_living_room", "Motion"],
-            ["gas_kitchen", "Gas"],
-            ["flame_kitchen", "Fire"],
-            ["door_main", "Main Door"],
-            ["vibration_window", "Window"],
+            ["motion_hallway", "Hallway Motion"],
+            ["motion_garage", "Garage Motion"],
+            ["gas_kitchen", "Kitchen Gas"],
+            ["gas_hallway", "Hallway Gas"],
+            ["gas_living_room", "Living Gas"],
+            ["flame_kitchen", "Kitchen Flame"],
+            ["flame_room_1", "Room 1 Flame"],
+            ["flame_room_2", "Room 2 Flame"],
+            ["window_1_reed", "Window 1"],
+            ["window_2_reed", "Window 2"],
+            ["window_3_reed", "Window 3"],
+            ["vibration_garage_door", "Garage Shock"],
           ].map(([sensor, label]) => (
             <Btn key={sensor} onClick={() => authedRequest(() => axios.post(`${API}/api/simulate-event`, { sensor_name: sensor }, { headers }))}>{label}</Btn>
           ))}
@@ -148,11 +170,18 @@ function App() {
       <Section title="Test Tools">
         <div style={styles.flex}>
           {[
-            ["motion_living_room", "Motion"],
-            ["gas_kitchen", "Gas"],
-            ["flame_kitchen", "Fire"],
-            ["door_main", "Main Door"],
-            ["vibration_window", "Window"],
+            ["motion_hallway", "Hallway Motion"],
+            ["motion_garage", "Garage Motion"],
+            ["gas_kitchen", "Kitchen Gas"],
+            ["gas_hallway", "Hallway Gas"],
+            ["gas_living_room", "Living Gas"],
+            ["flame_kitchen", "Kitchen Flame"],
+            ["flame_room_1", "Room 1 Flame"],
+            ["flame_room_2", "Room 2 Flame"],
+            ["window_1_reed", "Window 1"],
+            ["window_2_reed", "Window 2"],
+            ["window_3_reed", "Window 3"],
+            ["vibration_garage_door", "Garage Shock"],
           ].map(([sensor, label]) => (
             <Btn key={sensor} onClick={() => authedRequest(() => axios.post(`${API}/api/simulate-event`, { sensor_name: sensor }, { headers }))}>{label}</Btn>
           ))}
@@ -171,7 +200,7 @@ function App() {
         <Section title="Sensors">
           {sensors.map((s) => (
             <div key={s.id} style={styles.sensor}>
-              <div><strong>{s.sensor_name}</strong><p>{s.location}</p></div>
+              <div><strong>{sensorLabels[s.sensor_name] || s.sensor_name}</strong><p>{s.location}</p></div>
               <span>{s.status}</span>
             </div>
           ))}
