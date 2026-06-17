@@ -20,9 +20,9 @@ let memoryUserId = 1;
 const memorySensors = [
   { id: 1, sensor_name: "motion_hallway", sensor_type: "motion", location: "Hallway", status: "idle", last_value: null },
   { id: 2, sensor_name: "motion_garage", sensor_type: "motion", location: "Garage", status: "idle", last_value: null },
-  { id: 3, sensor_name: "gas_kitchen", sensor_type: "gas", location: "Kitchen", status: "idle", last_value: null },
-  { id: 4, sensor_name: "gas_hallway", sensor_type: "gas", location: "Hallway", status: "idle", last_value: null },
-  { id: 5, sensor_name: "gas_living_room", sensor_type: "gas", location: "Living Room", status: "idle", last_value: null },
+  { id: 3, sensor_name: "smoke_kitchen", sensor_type: "smoke", location: "Kitchen", status: "idle", last_value: null },
+  { id: 4, sensor_name: "smoke_hallway", sensor_type: "smoke", location: "Hallway", status: "idle", last_value: null },
+  { id: 5, sensor_name: "smoke_living_room", sensor_type: "smoke", location: "Living Room", status: "idle", last_value: null },
   { id: 6, sensor_name: "flame_kitchen", sensor_type: "flame", location: "Kitchen", status: "idle", last_value: null },
   { id: 7, sensor_name: "flame_room_1", sensor_type: "flame", location: "Room 1", status: "idle", last_value: null },
   { id: 8, sensor_name: "flame_room_2", sensor_type: "flame", location: "Room 2", status: "idle", last_value: null },
@@ -39,16 +39,6 @@ const legacySensorAliases = {
     location: "Hallway/Garage",
     sensorLabel: "Grouped Motion Sensors",
   },
-  gas_kitchen: {
-    sensorType: "gas",
-    location: "Kitchen/Hallway/Living Room",
-    sensorLabel: "Grouped Gas Sensors",
-  },
-  flame_kitchen: {
-    sensorType: "flame",
-    location: "Kitchen/Room 1/Room 2",
-    sensorLabel: "Grouped Flame Sensors",
-  },
   door_main: {
     sensorType: "door",
     location: "Window 1/Window 2/Window 3",
@@ -59,6 +49,24 @@ const legacySensorAliases = {
     sensorType: "vibration",
     location: "Garage Door",
     sensorLabel: "Garage Door Vibration Sensor",
+  },
+  gas_kitchen: {
+    sensorName: "smoke_kitchen",
+    sensorType: "smoke",
+    location: "Kitchen",
+    sensorLabel: "Kitchen Smoke Sensor",
+  },
+  gas_hallway: {
+    sensorName: "smoke_hallway",
+    sensorType: "smoke",
+    location: "Hallway",
+    sensorLabel: "Hallway Smoke Sensor",
+  },
+  gas_living_room: {
+    sensorName: "smoke_living_room",
+    sensorType: "smoke",
+    location: "Living Room",
+    sensorLabel: "Living Room Smoke Sensor",
   },
 };
 
@@ -77,8 +85,35 @@ const memoryEvents = [];
 const memoryNotifications = [];
 const memoryAccessLogs = [];
 const memoryUsers = [];
+let memoryNfcWrongStreak = 0;
 
 const JWT_SECRET = process.env.JWT_SECRET || "dev-secret-change-me";
+const NFC_WRONG_CARD_ALARM_THRESHOLD = 5;
+
+async function ensureDefaultSensors() {
+  const values = memorySensors.map((sensor) => [
+    sensor.sensor_name,
+    sensor.sensor_type,
+    sensor.location,
+  ]);
+
+  try {
+    await pool.query(
+      `INSERT INTO sensors (sensor_name, sensor_type, location)
+       SELECT * FROM UNNEST($1::text[], $2::text[], $3::text[])
+       ON CONFLICT (sensor_name) DO UPDATE
+       SET sensor_type = EXCLUDED.sensor_type,
+           location = EXCLUDED.location`,
+      [
+        values.map((item) => item[0]),
+        values.map((item) => item[1]),
+        values.map((item) => item[2]),
+      ]
+    );
+  } catch (error) {
+    if (!isDbUnavailable(error)) throw error;
+  }
+}
 
 function publicUser(user) {
   return {
@@ -322,6 +357,8 @@ async function processSensorEvent(sensorName, source = "simulation") {
   const lookupSensorName = legacyAlias?.sensorName || incomingSensorName;
   let sensor;
 
+  await ensureDefaultSensors();
+
   if (lookupSensorName) {
     try {
       const sensorResult = await pool.query(
@@ -365,6 +402,19 @@ async function processSensorEvent(sensorName, source = "simulation") {
   const isAway = mode === "away";
   const eventLocation = legacyAlias?.location || sensor.location;
   const isGroupedLegacyEvent = Boolean(legacyAlias && !legacyAlias.sensorName);
+  const isLifeSafetySensor =
+    sensor.sensor_type === "gas" ||
+    sensor.sensor_type === "smoke" ||
+    sensor.sensor_type === "flame";
+
+  if (isDisarmed && !isLifeSafetySensor) {
+    return {
+      success: true,
+      ignored: true,
+      mode,
+      reason: "system disarmed",
+    };
+  }
 
   let eventType = "";
   let severity = "low";
@@ -378,22 +428,22 @@ async function processSensorEvent(sensorName, source = "simulation") {
     shouldTriggerAlarm = isAway;
     severity = shouldTriggerAlarm ? "high" : "low";
   } else if (sensor.sensor_type === "door") {
-    eventType = "door_breach";
-    message = `Perimeter opened / breached at ${eventLocation}`;
+    eventType = "window_breach";
+    message = `Window breach detected at ${eventLocation}`;
     shouldTriggerAlarm = isHome || isAway;
     severity = shouldTriggerAlarm ? "high" : "low";
   } else if (
     sensor.sensor_type === "vibration" ||
     sensor.sensor_type === "window_vibration"
   ) {
-    eventType = "window_vibration_detected";
-    message = `Vibration detected at ${eventLocation}`;
+    eventType = "garage_vibration_detected";
+    message = `Vibration detected${eventLocation ? ` at ${eventLocation}` : ""}`;
     shouldTriggerAlarm = isHome || isAway;
     severity = shouldTriggerAlarm ? "high" : "low";
   } else if (sensor.sensor_type === "gas" || sensor.sensor_type === "smoke") {
-    eventType = "gas_detected";
+    eventType = sensor.sensor_type === "smoke" ? "smoke_detected" : "gas_detected";
     severity = "high";
-    message = `Gas detected in ${eventLocation}`;
+    message = `${sensor.sensor_type === "smoke" ? "Smoke" : "Gas"} detected in ${eventLocation}`;
     shouldTriggerAlarm = true;
   } else if (sensor.sensor_type === "flame") {
     eventType = "flame_detected";
@@ -524,11 +574,22 @@ async function processNfcAccess({ authorized, nfc_uid, user_name }) {
 
   const systemState = await getSystemState();
   const previousMode = systemState.current_mode;
-  const nfcStatusValue = authorized ? "authorized_access" : "unauthorized_access";
+  const currentDeniedStreak = authorized ? 0 : memoryNfcWrongStreak + 1;
+  const nfcAlarmTriggered =
+    !authorized && currentDeniedStreak % NFC_WRONG_CARD_ALARM_THRESHOLD === 0;
+  const nfcStatusValue = authorized
+    ? "authorized_access"
+    : nfcAlarmTriggered
+      ? "unauthorized_alarm"
+      : "unauthorized_access";
+  const nfcSensorStatus = authorized ? "safe" : nfcAlarmTriggered ? "triggered" : "idle";
+  memoryNfcWrongStreak = currentDeniedStreak;
+
+  await ensureDefaultSensors();
 
   const nfcSensor = memorySensors.find((sensor) => sensor.sensor_name === "nfc_main_door");
   if (nfcSensor) {
-    nfcSensor.status = "triggered";
+    nfcSensor.status = nfcSensorStatus;
     nfcSensor.last_value = nfcStatusValue;
     nfcSensor.updated_at = new Date().toISOString();
   }
@@ -536,11 +597,11 @@ async function processNfcAccess({ authorized, nfc_uid, user_name }) {
   try {
     await pool.query(
       `UPDATE sensors
-       SET status = 'triggered',
-           last_value = $1,
+       SET status = $1,
+           last_value = $2,
            updated_at = CURRENT_TIMESTAMP
        WHERE sensor_name = 'nfc_main_door'`,
-      [nfcStatusValue]
+      [nfcSensorStatus, nfcStatusValue]
     );
   } catch (error) {
     if (!isDbUnavailable(error)) throw error;
@@ -620,7 +681,7 @@ async function processNfcAccess({ authorized, nfc_uid, user_name }) {
     event_type: "unauthorized_access",
     severity: "high",
     message: "Unauthorized NFC attempt",
-    action_taken: "alarm triggered",
+    action_taken: "logged only",
     created_at: new Date().toISOString(),
   });
   memoryNotifications.unshift({
@@ -629,9 +690,6 @@ async function processNfcAccess({ authorized, nfc_uid, user_name }) {
     body: "Unauthorized NFC attempt at main door",
     created_at: new Date().toISOString(),
   });
-  memoryState.buzzer_on = true;
-  touchMemoryState();
-
   try {
     await pool.query(
       `INSERT INTO access_logs (nfc_uid, user_name, access_result)
@@ -641,25 +699,18 @@ async function processNfcAccess({ authorized, nfc_uid, user_name }) {
 
     await pool.query(`
       INSERT INTO events (event_type, severity, message, action_taken)
-      VALUES ('unauthorized_access', 'high', 'Unauthorized NFC attempt', 'alarm triggered')
+      VALUES ('unauthorized_access', 'high', 'Unauthorized NFC attempt', 'logged only')
     `);
 
     await pool.query(`
       INSERT INTO notifications (title, body)
       VALUES ('Alert: unauthorized_access', 'Unauthorized NFC attempt at main door')
     `);
-
-    await pool.query(`
-      UPDATE system_state
-      SET buzzer_on = TRUE,
-          updated_at = CURRENT_TIMESTAMP
-      WHERE id = 1
-    `);
   } catch (error) {
     if (!isDbUnavailable(error)) throw error;
   }
 
-  return { message: "Access denied - alarm triggered" };
+  return { message: "Access denied" };
 }
 
 function sendError(res, error) {
@@ -841,6 +892,7 @@ app.post("/api/system-mode", requireAuth, async (req, res) => {
 
 app.get("/api/sensors", requireAuth, async (req, res) => {
   try {
+    await ensureDefaultSensors();
     const result = await pool.query("SELECT * FROM sensors ORDER BY id ASC");
     res.json(result.rows);
   } catch (error) {
@@ -878,15 +930,16 @@ app.get("/api/notifications", requireAuth, async (req, res) => {
 
 app.post("/api/reset-system", requireAuth, async (req, res) => {
   try {
-    await pool.query(`
+    const stateResult = await pool.query(`
       UPDATE system_state
-      SET current_mode = 'away',
+      SET current_mode = 'disarmed',
           buzzer_on = FALSE,
           sprinkler_on = FALSE,
-          door_locked = TRUE,
-          esp_pending_command = 'RESETOUTPUTS',
+          door_locked = FALSE,
+          esp_pending_command = 'OFF',
           updated_at = CURRENT_TIMESTAMP
       WHERE id = 1
+      RETURNING *
     `);
 
     await pool.query(`
@@ -896,21 +949,22 @@ app.post("/api/reset-system", requireAuth, async (req, res) => {
           updated_at = CURRENT_TIMESTAMP
     `);
 
-    res.json({ success: true });
+    res.json(stateResult.rows[0]);
   } catch (error) {
     if (!isDbUnavailable(error)) return sendError(res, error);
     memoryState.buzzer_on = false;
     memoryState.sprinkler_on = false;
-    memoryState.door_locked = true;
-    memoryState.current_mode = "away";
-    memoryState.esp_pending_command = "RESETOUTPUTS";
+    memoryState.door_locked = false;
+    memoryState.current_mode = "disarmed";
+    memoryState.esp_pending_command = "OFF";
+    memoryNfcWrongStreak = 0;
     touchMemoryState();
     for (const sensor of memorySensors) {
       sensor.status = "idle";
       sensor.last_value = null;
       sensor.updated_at = new Date().toISOString();
     }
-    res.json({ success: true, storage: "memory-fallback" });
+    res.json(clone(memoryState));
   }
 });
 
@@ -972,15 +1026,16 @@ app.post("/api/full-reset", requireAuth, async (req, res) => {
     await pool.query("DELETE FROM notifications");
     await pool.query("DELETE FROM access_logs");
 
-    await pool.query(`
+    const stateResult = await pool.query(`
       UPDATE system_state
-      SET current_mode = 'away',
+      SET current_mode = 'disarmed',
           buzzer_on = FALSE,
           sprinkler_on = FALSE,
-          door_locked = TRUE,
-          esp_pending_command = 'RESETOUTPUTS',
+          door_locked = FALSE,
+          esp_pending_command = 'OFF',
           updated_at = CURRENT_TIMESTAMP
       WHERE id = 1
+      RETURNING *
     `);
 
     await pool.query(`
@@ -990,24 +1045,25 @@ app.post("/api/full-reset", requireAuth, async (req, res) => {
           updated_at = CURRENT_TIMESTAMP
     `);
 
-    res.json({ success: true, message: "Full system reset completed" });
+    res.json(stateResult.rows[0]);
   } catch (error) {
     if (!isDbUnavailable(error)) return sendError(res, error);
     memoryEvents.length = 0;
     memoryNotifications.length = 0;
     memoryAccessLogs.length = 0;
-    memoryState.current_mode = "away";
+    memoryState.current_mode = "disarmed";
     memoryState.buzzer_on = false;
     memoryState.sprinkler_on = false;
-    memoryState.door_locked = true;
-    memoryState.esp_pending_command = "RESETOUTPUTS";
+    memoryState.door_locked = false;
+    memoryState.esp_pending_command = "OFF";
+    memoryNfcWrongStreak = 0;
     touchMemoryState();
     for (const sensor of memorySensors) {
       sensor.status = "idle";
       sensor.last_value = null;
       sensor.updated_at = new Date().toISOString();
     }
-    res.json({ success: true, message: "Full system reset completed", storage: "memory-fallback" });
+    res.json(clone(memoryState));
   }
 });
 

@@ -89,6 +89,13 @@ export default function DashboardScreen() {
     const { aliases } = useSensorAliases(user?.id);
     const espLastSeenMs = systemState?.espLastSeen ? new Date(systemState.espLastSeen).getTime() : 0;
     const systemOnline = espLastSeenMs > 0 && Date.now() - espLastSeenMs < 15000;
+    const roomBySensorId = React.useMemo(() => {
+        const lookup = new Map<string, string>();
+        houseMap.rooms.forEach((room) => {
+            room.deviceIds.forEach((deviceId) => lookup.set(deviceId, room.label));
+        });
+        return lookup;
+    }, [houseMap.rooms]);
 
     React.useEffect(() => {
         let active = true;
@@ -122,7 +129,11 @@ export default function DashboardScreen() {
 
     const emergencyStatus = getEmergencyStatus(events?.slice(0, 10) ?? []);
     const isNormal = emergencyStatus.label === 'Normal';
-    const sensorsWithAliases = (sensors ?? []).map((sensor) => ({ ...sensor, label: aliases[sensor.id] || sensor.label }));
+    const sensorsWithAliases = (sensors ?? []).map((sensor) => ({
+        ...sensor,
+        label: aliases[sensor.id] || sensor.label,
+        location: roomBySensorId.get(sensor.id) ?? '',
+    }));
     const activeSensors = sensorsWithAliases.filter((sensor) => sensor.status !== 'idle' && sensor.status !== 'safe');
     const dismissWifiPrompt = () => {
         setWifiPromptOpen(false);
@@ -137,6 +148,11 @@ export default function DashboardScreen() {
             });
     };
     const changeMode = (mode: SystemMode) => {
+        if (!systemOnline) {
+            Alert.alert('System offline', 'The security system is not connected to the internet right now. Reconnect it before changing arm/disarm state.');
+            return;
+        }
+
         setMode(mode).catch((error) => {
             Alert.alert('Mode change failed', error instanceof Error ? error.message : 'Unknown error');
         });
@@ -185,6 +201,7 @@ export default function DashboardScreen() {
                 </View>
                 <Pressable
                     onPress={toggleLock}
+                    disabled={settingMode}
                     style={{
                         width: 52,
                         height: 52,
@@ -194,6 +211,7 @@ export default function DashboardScreen() {
                         backgroundColor: systemState.mode === 'away' ? `${colors.success}18` : '#071B34',
                         alignItems: 'center',
                         justifyContent: 'center',
+                        opacity: !systemOnline || settingMode ? 0.45 : 1,
                     }}
                 >
                     <MaterialCommunityIcons name={systemState.mode === 'away' ? 'lock' : 'lock-open-outline'} size={25} color={systemState.mode === 'away' ? colors.success : colors.text} />
@@ -267,7 +285,9 @@ export default function DashboardScreen() {
                                 <MaterialCommunityIcons name="radar" size={20} color={sensor.status === 'critical' || sensor.status === 'triggered' ? colors.critical : colors.primary} />
                                 <View style={{ flex: 1 }}>
                                     <Text style={{ color: colors.text, fontWeight: '900' }}>{sensor.label}</Text>
-                                    <Text style={{ color: colors.muted, fontSize: 12 }}>{sensor.location} - {sensor.status}</Text>
+                                    <Text style={{ color: colors.muted, fontSize: 12 }}>
+                                        {sensor.location ? `${sensor.location} - ${sensor.status}` : sensor.status}
+                                    </Text>
                                 </View>
                             </View>
                         ))}

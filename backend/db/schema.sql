@@ -72,9 +72,9 @@ INSERT INTO sensors (sensor_name, sensor_type, location)
 VALUES
   ('motion_hallway', 'motion', 'Hallway'),
   ('motion_garage', 'motion', 'Garage'),
-  ('gas_kitchen', 'gas', 'Kitchen'),
-  ('gas_hallway', 'gas', 'Hallway'),
-  ('gas_living_room', 'gas', 'Living Room'),
+  ('smoke_kitchen', 'smoke', 'Kitchen'),
+  ('smoke_hallway', 'smoke', 'Hallway'),
+  ('smoke_living_room', 'smoke', 'Living Room'),
   ('flame_kitchen', 'flame', 'Kitchen'),
   ('flame_room_1', 'flame', 'Room 1'),
   ('flame_room_2', 'flame', 'Room 2'),
@@ -89,7 +89,7 @@ SET sensor_type = EXCLUDED.sensor_type,
     updated_at = CURRENT_TIMESTAMP;
 
 DELETE FROM sensors
-WHERE sensor_name IN ('motion_living_room', 'smoke_kitchen', 'smoke_hallway', 'smoke_living_room', 'door_main', 'vibration_window');
+WHERE sensor_name IN ('motion_living_room', 'gas_kitchen', 'gas_hallway', 'gas_living_room', 'door_main', 'vibration_window');
 
 CREATE INDEX IF NOT EXISTS idx_events_created_at ON events(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_notifications_created_at ON notifications(created_at DESC);

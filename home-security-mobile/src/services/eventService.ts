@@ -7,12 +7,21 @@ type BackendEvent = {
     severity: EventItem['severity'];
     message: string;
     action_taken?: string;
+    sensor_id?: number | null;
     sensor_name?: string;
     location?: string;
     created_at: string;
 };
 
 function titleFromEventType(type: string) {
+    if (type === 'door_breach' || type === 'window_breach') {
+        return 'Window Breach';
+    }
+
+    if (type === 'window_vibration_detected' || type === 'garage_vibration_detected') {
+        return 'Vibration Detected';
+    }
+
     return type
         .split('_')
         .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
@@ -27,6 +36,7 @@ function mapEvent(row: BackendEvent): EventItem {
         message: row.message,
         severity: row.severity,
         actionTaken: row.action_taken,
+        sensorId: row.sensor_id != null ? String(row.sensor_id) : undefined,
         sensorName: row.sensor_name,
         location: row.location,
         createdAt: row.created_at,

@@ -14,6 +14,8 @@
 #include <WiFiClientSecure.h>
 #include <WebServer.h>
 #include <Preferences.h> 
+#include "soc/soc.h"
+#include "soc/rtc_cntl_reg.h"
 #include <string.h>
 
 #define RELAY_ON  LOW
@@ -28,15 +30,24 @@ const String SYSTEM_ADMIN_PASSWORD = "12345678";
 // Production cloud backend. The ESP32 can be on any Wi-Fi as long as it has internet.
 const char* API_BASE_URL = "https://capstone-msv5.onrender.com/api";
 
-const char* SENSOR_MOTION = "motion_living_room";
-const char* SENSOR_GAS = "gas_kitchen";
-const char* SENSOR_FLAME = "flame_kitchen";
-const char* SENSOR_DOOR = "door_main";
-const char* SENSOR_VIBRATION = "vibration_window";
+const char* SENSOR_MOTION_HALLWAY = "motion_hallway";
+const char* SENSOR_MOTION_GARAGE = "motion_garage";
+const char* SENSOR_SMOKE_KITCHEN = "smoke_kitchen";
+const char* SENSOR_SMOKE_HALLWAY = "smoke_hallway";
+const char* SENSOR_SMOKE_LIVING_ROOM = "smoke_living_room";
+const char* SENSOR_FLAME_KITCHEN = "flame_kitchen";
+const char* SENSOR_FLAME_ROOM_1 = "flame_room_1";
+const char* SENSOR_FLAME_ROOM_2 = "flame_room_2";
+const char* SENSOR_WINDOW_1 = "window_1_reed";
+const char* SENSOR_WINDOW_2 = "window_2_reed";
+const char* SENSOR_WINDOW_3 = "window_3_reed";
+const char* SENSOR_VIBRATION_GARAGE_DOOR = "vibration_garage_door";
 
 const unsigned long REPORT_COOLDOWN_MS = 5000;
 const unsigned long COMMAND_POLL_INTERVAL_MS = 5000;
-const unsigned long WIFI_CONNECT_TIMEOUT_MS = 60000;
+const unsigned long WIFI_CONNECT_TIMEOUT_MS = 20000;
+const unsigned long WIFI_RETRY_INTERVAL_MS = 30000;
+const unsigned long WIFI_RETRY_ATTEMPT_TIMEOUT_MS = 10000;
 const unsigned long WIFI_SCAN_CACHE_MS = 60000;
 const unsigned long WIFI_LOST_TO_SETUP_MS = 30000;
 const unsigned long API_FLUSH_INTERVAL_MS = 100;
@@ -48,24 +59,45 @@ const unsigned long ALARM_CHIRP_OFF_MS = 90;
 const unsigned long ALARM_BURST_PAUSE_MS = 420;
 const unsigned long WRONG_CARD_BEEP_ON_MS = 70;
 const unsigned long WRONG_CARD_BEEP_OFF_MS = 70;
+const unsigned long CONNECTED_BEEP_ON_MS = 55;
+const unsigned long CONNECTED_BEEP_OFF_MS = 65;
 const int ALARM_CHIRPS_PER_BURST = 3;
 const int WRONG_CARD_BEEP_STEPS = 4;
+const int CONNECTED_BEEP_STEPS = 4;
 const int MAX_WRONG_CARD_ATTEMPTS = 5;
 const int MAX_PENDING_API_REQUESTS = 12;
-const uint16_t HTTP_CONNECT_TIMEOUT_MS = 300;
-const uint16_t HTTP_READ_TIMEOUT_MS = 300;
+const uint16_t HTTP_CONNECT_TIMEOUT_MS = 2000;
+const uint16_t HTTP_READ_TIMEOUT_MS = 3000;
 
-unsigned long lastMotionReportTime = 0;
-unsigned long lastGasReportTime = 0;
-unsigned long lastFlameReportTime = 0;
-unsigned long lastDoorReportTime = 0;
-unsigned long lastVibrationReportTime = 0;
+struct SensorReportCooldown {
+  const char* sensorName;
+  unsigned long lastReportTime;
+};
+
+SensorReportCooldown sensorReportCooldowns[] = {
+  { SENSOR_MOTION_HALLWAY, 0 },
+  { SENSOR_MOTION_GARAGE, 0 },
+  { SENSOR_SMOKE_KITCHEN, 0 },
+  { SENSOR_SMOKE_HALLWAY, 0 },
+  { SENSOR_SMOKE_LIVING_ROOM, 0 },
+  { SENSOR_FLAME_KITCHEN, 0 },
+  { SENSOR_FLAME_ROOM_1, 0 },
+  { SENSOR_FLAME_ROOM_2, 0 },
+  { SENSOR_WINDOW_1, 0 },
+  { SENSOR_WINDOW_2, 0 },
+  { SENSOR_WINDOW_3, 0 },
+  { SENSOR_VIBRATION_GARAGE_DOOR, 0 },
+};
+
 unsigned long lastCommandPollTime = 0;
 unsigned long lastWifiScanTime = 0;
 unsigned long wifiDisconnectedSince = 0;
+unsigned long lastWifiRetryAttemptTime = 0;
+unsigned long wifiRetryAttemptStartedAt = 0;
 unsigned long lastApiFlushTime = 0;
 unsigned long lastApiFailureTime = 0;
 int consecutiveApiFailures = 0;
+int wifiRetryAttemptNumber = 0;
 
 struct PendingApiRequest {
   String path;
@@ -89,6 +121,8 @@ String saved_password = "";
 bool wifiConnected = false;
 bool isConfigModeActive = false;
 bool isAdminAuthenticated = false;
+bool wifiRetryInProgress = false;
+bool serverRoutesConfigured = false;
 bool ignoreNextResetWifiCommand = false;
 bool ignoredRecentResetWifiCommand = false;
 String provisionedSsidGuard = "";
@@ -142,6 +176,7 @@ MFRC522 rfid(rfid_SS_PIN, rfid_RST_PIN);
 Servo doorServo;
 
 int SMOKE_THRESHOLD = 900;  
+int HALLWAY_SMOKE_THRESHOLD = 1080;
 int FLAME_THRESHOLD = 3200;  
 const unsigned long GAS_SAMPLE_INTERVAL_MS = 100;
 const unsigned long FLAME_SAMPLE_INTERVAL_MS = 120;
@@ -149,7 +184,10 @@ const unsigned long PUMP_RUN_MS = 6000;
 const unsigned long FIRE_SENSOR_HOLD_MS = 2500;
 const unsigned long LOCAL_FIRE_ECHO_IGNORE_MS = 30000;
 const int FIRE_CONFIRM_SAMPLES = 4;
-const int GAS_CONFIRM_SAMPLES = 8;
+const int GAS_CONFIRM_SAMPLES = 6;
+const int HALLWAY_GAS_CONFIRM_SAMPLES = 14;
+const int REED_CONFIRM_SAMPLES = 4;
+const int VIBRATION_CONFIRM_SAMPLES = 1;
 const int FLAME_CLEAR_MARGIN = 80;
 const int GAS_CLEAR_MARGIN = 120;
 
@@ -163,9 +201,10 @@ const unsigned long printInterval = 10000;
 unsigned long lastSmokeCheckTime = 0; 
 unsigned long lastFlameCheckTime = 0; 
 unsigned long lastNFCCheckTime = 0; 
+unsigned long lastNfcIdleRefreshTime = 0;
 unsigned long lastExpanderCheckTime = 0; 
 unsigned long lastThreatLogRefreshTime = 0;
-unsigned long lastContinuousAlertTime = 0; // Timer for repeating alerts every 2 seconds
+unsigned long lastContinuousAlertTime = 0;
 bool backendBuzzerLatched = false;
 bool backendSprinklerLatched = false;
 bool feedbackBuzzerActive = false;
@@ -174,14 +213,17 @@ bool wrongCardBeepActive = false;
 bool triggerAlarmAfterWrongCardBeeps = false;
 unsigned long lastWrongCardBeepToggle = 0;
 int wrongCardBeepStep = 0;
+bool connectedBeepActive = false;
+unsigned long lastConnectedBeepToggle = 0;
+int connectedBeepStep = 0;
 bool alarmBuzzerOutput = false;
 unsigned long lastAlarmBuzzerToggle = 0;
 int alarmBurstChirpCount = 0;
 
 unsigned long hallwayPIR_Timer = 0;
 unsigned long garagePIR_Timer = 0;
-const unsigned long pirDebounceTime = 40; 
-const unsigned long PIR_PULSE_LATCH_MS = 2500;
+const unsigned long pirDebounceTime = 900;
+const unsigned long PIR_PULSE_LATCH_MS = 0;
 volatile bool hallwayPIR_Pulse = false;
 volatile bool garagePIR_Pulse = false;
 unsigned long hallwayPIR_LatchUntil = 0;
@@ -191,6 +233,11 @@ bool isIntrusionActive = false;
 unsigned long intrusionTimer = 0;
 bool isFireActive = false;
 unsigned long fireTimer = 0;
+bool fireConditionLatched = false;
+bool gasConditionLatched = false;
+bool kitchenGasReported = false;
+bool hallwayGasReported = false;
+bool livingGasReported = false;
 
 bool pump1State = false; unsigned long pump1Timer = 0;
 bool pump2State = false; unsigned long pump2Timer = 0;
@@ -209,13 +256,16 @@ int livingGasCounter = 0;
 bool pendingAwayMode = false;
 unsigned long awayModeActivationTimer = 0;
 
-unsigned long lastCardReadTime = 0;
-const unsigned long cardCooldown = 7000; 
-const unsigned long NFC_RELEASE_MS = 1200;
+const unsigned long NFC_KEEPALIVE_MS = 250;
+const unsigned long NFC_IDLE_REFRESH_MS = 1000;
+const unsigned long NFC_RELEASE_MS = 350;
+const unsigned long NFC_HELD_STUCK_MS = 900;
 const unsigned long LOCAL_DOOR_OVERRIDE_MS = 5000;
 const unsigned long LOCAL_MODE_OVERRIDE_MS = 8000;
 const unsigned long NFC_ARM_SETTLE_MS = 5000;
 const unsigned long NFC_MOTION_IGNORE_MS = 1500;
+const unsigned long REED_MOTION_COOLDOWN_MS = 1000;
+const unsigned long SENSOR_CHANGE_SETTLE_MS = 1500;
 int wrongCardCount = 0; 
 bool nfcCardHeld = false;
 unsigned long nfcLastSeenTime = 0;
@@ -249,12 +299,14 @@ bool lastReed1Triggered = false;
 bool lastReed2Triggered = false;
 bool lastReed3Triggered = false;
 
-// Dynamic status string to hold current live threats globally
 String activeThreatLog = "";
 
-// Forward declaration of emergency boot routine
 void startEmergencySystems();
 void stopBLEHardware();
+void configureServerRoutes();
+void serviceSavedWifiConnection();
+void beginSavedWifiRetry(bool force);
+void onSavedWifiConnected();
 
 void sendBLE(String text) {
 #if ENABLE_BLE
@@ -353,7 +405,12 @@ bool postJson(String path, String body) {
 }
 
 bool enqueuePostJson(String path, String body) {
-  if (WiFi.status() != WL_CONNECTED || isConfigModeActive) return false;
+  for (int i = 0; i < pendingApiCount; i++) {
+    int index = (pendingApiHead + i) % MAX_PENDING_API_REQUESTS;
+    if (pendingApiRequests[index].path == path && pendingApiRequests[index].body == body) {
+      return true;
+    }
+  }
 
   int insertIndex;
   if (pendingApiCount >= MAX_PENDING_API_REQUESTS) {
@@ -379,23 +436,25 @@ void processPendingApiRequests() {
 
   lastApiFlushTime = millis();
   PendingApiRequest request = pendingApiRequests[pendingApiHead];
-  pendingApiHead = (pendingApiHead + 1) % MAX_PENDING_API_REQUESTS;
-  pendingApiCount--;
-  postJson(request.path, request.body);
+  if (postJson(request.path, request.body)) {
+    pendingApiHead = (pendingApiHead + 1) % MAX_PENDING_API_REQUESTS;
+    pendingApiCount--;
+  }
 }
 
 unsigned long* reportTimerForSensor(const char* sensorName) {
-  if (strcmp(sensorName, SENSOR_MOTION) == 0) return &lastMotionReportTime;
-  if (strcmp(sensorName, SENSOR_GAS) == 0) return &lastGasReportTime;
-  if (strcmp(sensorName, SENSOR_FLAME) == 0) return &lastFlameReportTime;
-  if (strcmp(sensorName, SENSOR_DOOR) == 0) return &lastDoorReportTime;
-  if (strcmp(sensorName, SENSOR_VIBRATION) == 0) return &lastVibrationReportTime;
+  for (size_t i = 0; i < sizeof(sensorReportCooldowns) / sizeof(sensorReportCooldowns[0]); i++) {
+    if (strcmp(sensorName, sensorReportCooldowns[i].sensorName) == 0) {
+      return &sensorReportCooldowns[i].lastReportTime;
+    }
+  }
 
-  return &lastGasReportTime;
+  return nullptr;
 }
 
 void reportSensorEvent(const char* sensorName) {
   unsigned long* lastReportTime = reportTimerForSensor(sensorName);
+  if (lastReportTime == nullptr) return;
   if (*lastReportTime != 0 && millis() - *lastReportTime < REPORT_COOLDOWN_MS) return;
 
   *lastReportTime = millis();
@@ -453,6 +512,15 @@ void startWrongCardBeeps(bool triggerAlarmAfterBeeps = false) {
   digitalWrite(BUZZER_PIN, RELAY_ON);
 }
 
+void startConnectedBeeps() {
+  if (isIntrusionActive || isFireActive || wrongCardBeepActive) return;
+  feedbackBuzzerActive = false;
+  connectedBeepActive = true;
+  connectedBeepStep = 0;
+  lastConnectedBeepToggle = millis();
+  digitalWrite(BUZZER_PIN, RELAY_ON);
+}
+
 void serviceBuzzer(bool alarmRequested) {
   unsigned long now = millis();
 
@@ -477,10 +545,29 @@ void serviceBuzzer(bool alarmRequested) {
         digitalWrite(BUZZER_PIN, RELAY_OFF);
         if (triggerAlarmAfterWrongCardBeeps) {
           triggerAlarmAfterWrongCardBeeps = false;
-          triggerSecurityAlarm(SENSOR_DOOR);
+          startAlarmBurst();
+          reportEspState(awayMode ? "away" : "disarmed", !doorOpen);
         }
       } else {
         digitalWrite(BUZZER_PIN, ((wrongCardBeepStep % 2) == 0) ? RELAY_ON : RELAY_OFF);
+      }
+    }
+    return;
+  }
+
+  if (connectedBeepActive) {
+    bool beepOn = (connectedBeepStep % 2) == 0;
+    unsigned long waitMs = beepOn ? CONNECTED_BEEP_ON_MS : CONNECTED_BEEP_OFF_MS;
+
+    if (now - lastConnectedBeepToggle >= waitMs) {
+      lastConnectedBeepToggle = now;
+      connectedBeepStep++;
+
+      if (connectedBeepStep >= CONNECTED_BEEP_STEPS) {
+        connectedBeepActive = false;
+        digitalWrite(BUZZER_PIN, RELAY_OFF);
+      } else {
+        digitalWrite(BUZZER_PIN, ((connectedBeepStep % 2) == 0) ? RELAY_ON : RELAY_OFF);
       }
     }
     return;
@@ -562,14 +649,14 @@ bool confirmHighDanger(int value, int threshold, int clearMargin, int requiredSa
   return counter >= requiredSamples;
 }
 
-bool debounceExpanderHigh(bool rawHigh, int& counter) {
+bool debounceExpanderHigh(bool rawHigh, int& counter, int requiredSamples) {
   if (rawHigh) {
-    counter = 1;
+    if (counter < requiredSamples) counter++;
   } else {
     counter = 0;
   }
 
-  return counter >= 1;
+  return counter >= requiredSamples;
 }
 
 void holdPumpWhileFire(bool fireConfirmed, bool& pumpState, unsigned long& pumpTimer, unsigned long& fireLastSeen, int flameValue, const char* label, unsigned long now) {
@@ -613,10 +700,34 @@ void resetSecurityEdges() {
   vibrationCounter = 0;
 }
 
+void extendCooldown(unsigned long& cooldownUntil, unsigned long durationMs) {
+  unsigned long nextUntil = millis() + durationMs;
+  if ((long)(nextUntil - cooldownUntil) > 0) {
+    cooldownUntil = nextUntil;
+  }
+}
+
+void suppressSecurityInputs(unsigned long durationMs) {
+  extendCooldown(ignoreIntrusionUntil, durationMs);
+  extendCooldown(ignoreMotionReportUntil, durationMs);
+  resetSecurityEdges();
+}
+
+void refreshNfcReader() {
+  rfid.PCD_Init();
+  rfid.PCD_SetAntennaGain(rfid.RxGain_max);
+  rfid.PCD_AntennaOn();
+  lastNFCCheckTime = millis();
+  lastNfcIdleRefreshTime = millis();
+}
+
 void triggerSecurityAlarm(const char* sensorName) {
-  startAlarmBurst();
   reportSensorEvent(sensorName);
-  reportEspState("away", !doorOpen);
+
+  if (!isIntrusionActive) {
+    startAlarmBurst();
+    reportEspState("away", !doorOpen);
+  }
 }
 
 void moveDoorServo(int angle) {
@@ -627,15 +738,19 @@ void moveDoorServo(int angle) {
 }
 
 void openDoorLocal() {
+  suppressSecurityInputs(SENSOR_CHANGE_SETTLE_MS);
   doorOpen = true;
   moveDoorServo(OPEN_ANGLE);
   localDoorOverrideUntil = millis() + LOCAL_DOOR_OVERRIDE_MS;
+  suppressSecurityInputs(SENSOR_CHANGE_SETTLE_MS);
 }
 
 void closeDoorLocal() {
+  suppressSecurityInputs(SENSOR_CHANGE_SETTLE_MS);
   doorOpen = false;
   moveDoorServo(CLOSE_ANGLE);
   localDoorOverrideUntil = millis() + LOCAL_DOOR_OVERRIDE_MS;
+  suppressSecurityInputs(SENSOR_CHANGE_SETTLE_MS);
 }
 
 void clearActiveOutputs() {
@@ -643,6 +758,7 @@ void clearActiveOutputs() {
   backendSprinklerLatched = false;
   feedbackBuzzerActive = false;
   wrongCardBeepActive = false;
+  connectedBeepActive = false;
   triggerAlarmAfterWrongCardBeeps = false;
   alarmBuzzerOutput = false;
   alarmBurstChirpCount = 0;
@@ -657,6 +773,11 @@ void clearActiveOutputs() {
   pump2State = false;
   pump3State = false;
   lastLocalFireTriggerTime = 0;
+  fireConditionLatched = false;
+  gasConditionLatched = false;
+  kitchenGasReported = false;
+  hallwayGasReported = false;
+  livingGasReported = false;
   kitchenFireLastSeen = 0;
   room1FireLastSeen = 0;
   room2FireLastSeen = 0;
@@ -718,21 +839,6 @@ void pollBackendCommands() {
   bool backendResetOutputs = response.indexOf("\"command\":\"RESETOUTPUTS\"") >= 0;
 
   if (backendResetWifi) {
-    bool justConnectedToSavedWifi = saved_ssid.length() > 0 && wifiConnectSuccessTime > 0 && millis() - wifiConnectSuccessTime < 60000 && !ignoredRecentResetWifiCommand;
-    bool recentlyProvisioned = wifiConnectSuccessTime > 0 && millis() - wifiConnectSuccessTime < 180000;
-    bool sameProvisionedSsid = provisionedSsidGuard.length() > 0 && provisionedSsidGuard == saved_ssid;
-
-    if (justConnectedToSavedWifi || ignoreNextResetWifiCommand || (recentlyProvisioned && sameProvisionedSsid)) {
-      ignoredRecentResetWifiCommand = true;
-      ignoreNextResetWifiCommand = false;
-      provisionedSsidGuard = "";
-      preferences.begin("wifi-gate", false);
-      preferences.putBool("just_provisioned", false);
-      preferences.remove("provisioned_ssid");
-      preferences.end();
-      Serial.println("\n[APP]: Ignored stale Wi-Fi reset command after recent Wi-Fi connection.");
-      return;
-    }
     Serial.println("\n[APP]: Wi-Fi reset/provisioning requested from mobile/web app.");
     processCommand("RESETWIFI");
     return;
@@ -789,6 +895,7 @@ void pollBackendCommands() {
     fireTimer = millis();
     Serial.println("\n[APP]: Backend sprinkler state triggered pump test.");
   } else if (backendSprinklerOn && ignoreBackendSprinklerEcho) {
+    backendSprinklerLatched = true;
     Serial.println("\n[APP]: Ignored backend sprinkler echo after local fire event.");
   }
 
@@ -828,6 +935,11 @@ void processCommand(String command) {
     
     WiFi.disconnect(true, true);
     wifiConnected = false;
+    saved_ssid = "";
+    saved_password = "";
+    wifiRetryInProgress = false;
+    wifiRetryAttemptNumber = 0;
+    isConfigModeActive = false;
     
     startEmergencySystems();
     return;
@@ -876,6 +988,7 @@ void processCommand(String command) {
     if (bleActive && deviceConnected) { sendBLE("[SECURITY]: ENABLED. Door closed.\n"); } 
   } 
   else if (command.equalsIgnoreCase("OFF")) { 
+    clearActiveOutputs();
     awayMode = false; 
     pendingAwayMode = false; 
     openDoorLocal(); 
@@ -1050,6 +1163,21 @@ void handleConfigRoot() {
 }
 void handleRoot() { server.send(200, "text/html", webDashboardHTML); }
 void handleWebCommand() { if (server.hasArg("cmd")) { processCommand(server.arg("cmd")); } server.send(200, "text/plain", "OK"); }
+void handleRootRoute() {
+  if (isConfigModeActive) {
+    handleConfigRoot();
+  } else {
+    handleRoot();
+  }
+}
+void handleActionRoute() {
+  if (isConfigModeActive) {
+    server.send(404, "text/plain", "System is in Wi-Fi setup mode");
+    return;
+  }
+
+  handleWebCommand();
+}
 void handleAppWifiStatus() {
   server.sendHeader("Access-Control-Allow-Origin", "*");
   server.send(200, "application/json", "{\"success\":true,\"setup_ap\":\"Home Security System\"}");
@@ -1156,6 +1284,105 @@ void stopBLEHardware() {
 }
 #endif
 
+void configureServerRoutes() {
+  if (serverRoutesConfigured) return;
+
+  server.on("/", handleRootRoute);
+  server.on("/action", handleActionRoute);
+  server.on("/auth", handleAuth);
+  server.on("/save", handleSave);
+  server.on("/api/wifi/status", HTTP_ANY, handleAppWifiStatus);
+  server.on("/api/wifi/networks", HTTP_ANY, handleAppWifiNetworks);
+  server.on("/api/wifi/networks.txt", HTTP_ANY, handleAppWifiNetworksText);
+  server.on("/api/wifi/save", HTTP_ANY, handleAppWifiSave);
+  serverRoutesConfigured = true;
+}
+
+void applyStableWifiPowerSettings() {
+  WiFi.setTxPower(WIFI_POWER_11dBm);
+}
+
+void applySetupApWifiPowerSettings() {
+  WiFi.setTxPower(WIFI_POWER_19_5dBm);
+}
+
+void onSavedWifiConnected() {
+  bool wasConnected = wifiConnected && !isConfigModeActive;
+  wifiConnected = true;
+  wifiRetryInProgress = false;
+  wifiDisconnectedSince = 0;
+  wifiConnectSuccessTime = millis();
+
+  if (isConfigModeActive) {
+    WiFi.softAPdisconnect(true);
+    WiFi.mode(WIFI_STA);
+    isConfigModeActive = false;
+    isAdminAuthenticated = false;
+  }
+
+  if (bleActive && !deviceConnected) {
+    stopBLEHardware();
+  }
+
+  configureServerRoutes();
+  server.begin();
+  Serial.print("\n[WIFI]: Connected to saved Wi-Fi. IP: ");
+  Serial.println(WiFi.localIP());
+  Serial.print("[WIFI]: Free heap after connect: ");
+  Serial.println(ESP.getFreeHeap());
+  if (!wasConnected) {
+    startConnectedBeeps();
+  }
+}
+
+void beginSavedWifiRetry(bool force) {
+  if (saved_ssid.length() == 0) return;
+  if (WiFi.status() == WL_CONNECTED) {
+    onSavedWifiConnected();
+    return;
+  }
+  if (wifiRetryInProgress) return;
+  if (!force && millis() - lastWifiRetryAttemptTime < WIFI_RETRY_INTERVAL_MS) return;
+
+  lastWifiRetryAttemptTime = millis();
+  wifiRetryAttemptStartedAt = millis();
+  wifiRetryInProgress = true;
+  wifiRetryAttemptNumber++;
+
+  Serial.printf("\n[WIFI]: Retry %d connecting to saved SSID: %s\n", wifiRetryAttemptNumber, saved_ssid.c_str());
+  WiFi.persistent(false);
+  WiFi.setSleep(false);
+  WiFi.mode(isConfigModeActive ? WIFI_AP_STA : WIFI_STA);
+  applyStableWifiPowerSettings();
+  WiFi.disconnect(false, false);
+  WiFi.begin(saved_ssid.c_str(), saved_password.c_str());
+}
+
+void serviceSavedWifiConnection() {
+  if (saved_ssid.length() == 0) return;
+
+  if (WiFi.status() == WL_CONNECTED) {
+    if (!wifiConnected || isConfigModeActive || wifiRetryInProgress) {
+      onSavedWifiConnected();
+    }
+    return;
+  }
+
+  wifiConnected = false;
+
+  if (wifiRetryInProgress) {
+    if (millis() - wifiRetryAttemptStartedAt >= WIFI_RETRY_ATTEMPT_TIMEOUT_MS) {
+      wifiRetryInProgress = false;
+      WiFi.disconnect(false, false);
+      WiFi.mode(isConfigModeActive ? WIFI_AP_STA : WIFI_STA);
+      Serial.printf("\n[WIFI]: Retry %d timed out. Next retry in %lu ms.\n", wifiRetryAttemptNumber, WIFI_RETRY_INTERVAL_MS);
+    }
+    return;
+  }
+
+  beginSavedWifiRetry(false);
+}
+
 void startEmergencySystems() {
   if (isConfigModeActive) return;
 
@@ -1168,13 +1395,24 @@ void startEmergencySystems() {
   WiFi.disconnect(false, false);
   delay(250);
   WiFi.mode(WIFI_AP_STA);
+  applySetupApWifiPowerSettings();
   WiFi.softAPConfig(setupApIp, setupApGateway, setupApSubnet);
-  WiFi.softAP(ap_ssid, ap_password, 1, 0, 4);
+  bool apStarted = WiFi.softAP(ap_ssid, ap_password, 1, 0, 4);
+  if (!apStarted) {
+    Serial.println("[WIFI SETUP]: First AP start failed, retrying in AP-only mode...");
+    WiFi.mode(WIFI_AP);
+    delay(250);
+    applySetupApWifiPowerSettings();
+    WiFi.softAPConfig(setupApIp, setupApGateway, setupApSubnet);
+    apStarted = WiFi.softAP(ap_ssid, ap_password, 1, 0, 4);
+  }
   delay(500);
   Serial.print("[WIFI SETUP]: AP IP: ");
   Serial.println(WiFi.softAPIP());
+  Serial.print("[WIFI SETUP]: AP start result: ");
+  Serial.println(apStarted ? "ok" : "failed");
   isConfigModeActive = true;
-  server.on("/", handleConfigRoot); server.on("/auth", handleAuth); server.on("/save", handleSave); server.on("/api/wifi/status", HTTP_ANY, handleAppWifiStatus); server.on("/api/wifi/networks", HTTP_ANY, handleAppWifiNetworks); server.on("/api/wifi/networks.txt", HTTP_ANY, handleAppWifiNetworksText); server.on("/api/wifi/save", HTTP_ANY, handleAppWifiSave);
+  configureServerRoutes();
   server.begin();
   startBLEHardware();
 }
@@ -1187,6 +1425,9 @@ void playSecurityDeactivatedSound() { startFeedbackBuzzer(180); }
 void setup() {
   Serial.begin(115200);
   delay(100);
+  WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0);
+  applyStableWifiPowerSettings();
+  delay(1000);
   
   // ZERO-GLITCH BOOT STRATEGY
   pinMode(PUMP_1_PIN, INPUT_PULLUP); pinMode(PUMP_2_PIN, INPUT_PULLUP); pinMode(PUMP_3_PIN, INPUT_PULLUP); pinMode(BUZZER_PIN, INPUT_PULLUP);
@@ -1219,45 +1460,45 @@ void setup() {
   }
   
   if (saved_ssid == "") {
+    Serial.println("\n[WIFI]: No saved SSID. Starting setup AP.");
     startEmergencySystems();
   } else {
     Serial.print("\n[WIFI]: Stored SSID found: ");
     Serial.println(saved_ssid);
-    WiFi.mode(WIFI_STA);
+    WiFi.persistent(false);
     WiFi.setSleep(false);
+    WiFi.mode(WIFI_STA);
+    applyStableWifiPowerSettings();
     WiFi.disconnect(false, false);
     delay(500);
     WiFi.begin(saved_ssid.c_str(), saved_password.c_str());
+
     unsigned long startAttemptTime = millis();
-    
-    Serial.println("\nâ³ Aligning local Wi-Fi handshake connectivity...");
-    while (WiFi.status() != WL_CONNECTED && millis() - startAttemptTime < WIFI_CONNECT_TIMEOUT_MS) { delay(500); Serial.print("."); }
-    
+    Serial.println("\n[WIFI]: Connecting to saved Wi-Fi...");
+    while (WiFi.status() != WL_CONNECTED && millis() - startAttemptTime < WIFI_CONNECT_TIMEOUT_MS) {
+      delay(250);
+      Serial.print(".");
+    }
+
     if (WiFi.status() == WL_CONNECTED) {
-      wifiConnected = true;
-      wifiDisconnectedSince = 0;
-      wifiConnectSuccessTime = millis(); 
-      if (bleActive) stopBLEHardware();
-      server.on("/", handleRoot); server.on("/action", handleWebCommand);
-      server.begin();
-      Serial.print("\nðŸŒ Wi-Fi IP Connected: "); Serial.println(WiFi.localIP());
-      Serial.print("[WIFI]: Free heap after connect: ");
-      Serial.println(ESP.getFreeHeap());
+      onSavedWifiConnected();
     } else {
-      Serial.print("\n[WIFI]: Failed to connect. WiFi.status() = ");
+      Serial.print("\n[WIFI]: Saved Wi-Fi connect failed. WiFi.status() = ");
       Serial.println(WiFi.status());
-      Serial.println("[WIFI]: Falling back to Home Security System setup mode.");
+      Serial.println("[WIFI]: Starting setup AP and continuing saved-Wi-Fi retries.");
       startEmergencySystems();
+      beginSavedWifiRetry(true);
     }
   }
 
-  SPI.begin(18, 19, 23, 5); rfid.PCD_Init(); rfid.PCD_SetAntennaGain(rfid.RxGain_max); rfid.PCD_AntennaOn(); delay(50); 
+  SPI.begin(18, 19, 23, 5); refreshNfcReader(); delay(50);
   Wire.begin(21, 22); Wire.beginTransmission(PCF8574_ADDRESS); Wire.write(0xFF); Wire.endTransmission();
   doorOpen = true;
 }
 
 void loop() {
   server.handleClient();
+  serviceSavedWifiConnection();
 
   if (WiFi.status() == WL_CONNECTED) {
     wifiConnected = true;
@@ -1284,10 +1525,11 @@ void loop() {
     if (!isConfigModeActive) {
       if (wifiDisconnectedSince == 0) {
         wifiDisconnectedSince = millis();
-        Serial.println("\n[WIFI]: Connection lost. Waiting before setup fallback...");
+        Serial.println("\n[WIFI]: Connection lost. Local alarms remain active while Wi-Fi retries.");
       } else if (millis() - wifiDisconnectedSince >= WIFI_LOST_TO_SETUP_MS) {
-        Serial.println("\n[WIFI]: Still disconnected. Starting setup fallback.");
+        Serial.println("\n[WIFI]: Still disconnected. Starting setup AP and continuing saved-Wi-Fi retries.");
         startEmergencySystems();
+        beginSavedWifiRetry(true);
       }
     }
   }
@@ -1303,29 +1545,42 @@ void loop() {
   }
 
   // ðŸ›¡ï¸ [Sensor Matrix Engine Loops]
-  if (millis() - lastNFCCheckTime >= 1000) { lastNFCCheckTime = millis(); rfid.PCD_Init(); rfid.PCD_SetAntennaGain(rfid.RxGain_max); rfid.PCD_AntennaOn(); }
+  if (millis() - lastNFCCheckTime >= NFC_KEEPALIVE_MS) {
+    lastNFCCheckTime = millis();
+    rfid.PCD_AntennaOn();
+  }
 
-  bool nfcCardPresent = rfid.PICC_IsNewCardPresent() && rfid.PICC_ReadCardSerial();
+  if (!nfcCardHeld && !feedbackBuzzerActive && !wrongCardBeepActive && millis() - lastNfcIdleRefreshTime >= NFC_IDLE_REFRESH_MS) {
+    refreshNfcReader();
+  }
+
+  bool nfcCardReady = rfid.PICC_IsNewCardPresent();
+  bool nfcCardPresent = nfcCardReady && rfid.PICC_ReadCardSerial();
 
   if (!nfcCardPresent && nfcCardHeld && millis() - nfcLastSeenTime >= NFC_RELEASE_MS) {
       nfcCardHeld = false;
+  }
+
+  if (nfcCardHeld && millis() - nfcLastSeenTime >= NFC_HELD_STUCK_MS) {
+      nfcCardHeld = false;
+      refreshNfcReader();
+      Serial.println("\n[NFC]: Reader hold latch recovered.");
   }
 
   if (nfcCardPresent) {
       nfcLastSeenTime = millis();
       bool accessGranted = true;
       for (byte i = 0; i < 4; i++) { if (rfid.uid.uidByte[i] != authorizedUID[i]) { accessGranted = false; break; } }
-      bool activeDangerOutput = isIntrusionActive || isFireActive || pump1State || pump2State || pump3State;
-      bool canProcessCard = !nfcCardHeld && (!accessGranted || millis() - lastCardReadTime >= cardCooldown || (accessGranted && activeDangerOutput));
+      bool canProcessCard = !nfcCardHeld;
+      bool nfcCardHandled = false;
 
       if (canProcessCard) { 
+        nfcCardHandled = true;
         nfcCardHeld = true;
-        lastCardReadTime = millis(); 
-        ignoreMotionReportUntil = millis() + NFC_MOTION_IGNORE_MS;
+        suppressSecurityInputs(NFC_MOTION_IGNORE_MS);
         resetSecurityEdges();
-        reportNfcAccess(accessGranted);
-
         if (accessGranted) {
+          reportNfcAccess(true);
           wrongCardCount = 0;
           clearActiveOutputs();
           playCorrectCardSound();
@@ -1335,8 +1590,7 @@ void loop() {
             awayMode = true;
             pendingAwayMode = false;
             localModeOverrideUntil = millis() + LOCAL_MODE_OVERRIDE_MS;
-            resetSecurityEdges();
-            ignoreIntrusionUntil = millis() + NFC_ARM_SETTLE_MS;
+            suppressSecurityInputs(NFC_ARM_SETTLE_MS);
             reportSystemMode("away");
             reportEspState("away", true);
             Serial.println("\n[NFC]: Authorized Card. Door closed, away mode armed.");
@@ -1347,6 +1601,7 @@ void loop() {
             pendingAwayMode = false;
             localModeOverrideUntil = millis() + LOCAL_MODE_OVERRIDE_MS;
             ignoreIntrusionUntil = 0;
+            suppressSecurityInputs(SENSOR_CHANGE_SETTLE_MS);
             reportSystemMode("disarmed");
             reportEspState("disarmed", false);
             Serial.println("\n[NFC]: Authorized Card. Door opened, system disarmed.");
@@ -1355,6 +1610,7 @@ void loop() {
         } else {
           wrongCardCount++;
           bool tooManyWrongCards = wrongCardCount >= MAX_WRONG_CARD_ATTEMPTS;
+          reportNfcAccess(false);
           startWrongCardBeeps(tooManyWrongCards);
           Serial.printf("\n[NFC]: Unauthorized card rejected. Attempt %d/%d.\n", wrongCardCount, MAX_WRONG_CARD_ATTEMPTS);
           if (bleActive && deviceConnected) {
@@ -1370,7 +1626,10 @@ void loop() {
           }
         }
       }
-      rfid.PICC_HaltA(); 
+      if (nfcCardHandled) {
+        rfid.PICC_HaltA();
+        rfid.PCD_StopCrypto1();
+      }
   }
 
   bool hallwayPIR_Interrupt = hallwayPIR_Pulse;
@@ -1396,36 +1655,79 @@ void loop() {
     Wire.requestFrom(PCF8574_ADDRESS, 1);
     if (Wire.available()) { 
       byte expanderData = Wire.read(); 
-      reed1 = debounceExpanderHigh(bitRead(expanderData, 0), reed1Counter);
-      reed2 = debounceExpanderHigh(bitRead(expanderData, 1), reed2Counter);
-      reed3 = debounceExpanderHigh(bitRead(expanderData, 2), reed3Counter);
-      vibration = debounceExpanderHigh(bitRead(expanderData, 3), vibrationCounter);
+      reed1 = debounceExpanderHigh(bitRead(expanderData, 0), reed1Counter, REED_CONFIRM_SAMPLES);
+      reed2 = debounceExpanderHigh(bitRead(expanderData, 1), reed2Counter, REED_CONFIRM_SAMPLES);
+      reed3 = debounceExpanderHigh(bitRead(expanderData, 2), reed3Counter, REED_CONFIRM_SAMPLES);
+      vibration = debounceExpanderHigh(bitRead(expanderData, 3), vibrationCounter, VIBRATION_CONFIRM_SAMPLES);
     }
   }
 
   bool physicalVibrationTriggered = vibration;
-  bool physicalMotionEdge = (hallwayPIR_Triggered && !lastHallwayPIRTriggered) ||
-                            (garagePIR_Triggered && !lastGaragePIRTriggered);
+  bool hallwayMotionEdge = hallwayPIR_Triggered && !lastHallwayPIRTriggered;
+  bool garageMotionEdge = garagePIR_Triggered && !lastGaragePIRTriggered;
   bool physicalDoorEdge = (reed1 && !lastReed1Triggered) ||
                           (reed2 && !lastReed2Triggered) ||
                           (reed3 && !lastReed3Triggered);
 
-  bool intrusionInputsAllowed = (long)(millis() - ignoreIntrusionUntil) >= 0;
-  bool motionReportsAllowed = (long)(millis() - ignoreMotionReportUntil) >= 0;
+  if (physicalDoorEdge) {
+    extendCooldown(ignoreMotionReportUntil, REED_MOTION_COOLDOWN_MS);
+    hallwayPIR_Timer = 0;
+    garagePIR_Timer = 0;
+    hallwayPIR_LatchUntil = 0;
+    garagePIR_LatchUntil = 0;
+    lastHallwayPIRTriggered = hallwayPIR_Triggered;
+    lastGaragePIRTriggered = garagePIR_Triggered;
+  }
 
-  if (physicalMotionEdge && motionReportsAllowed) {
-    reportSensorEvent(SENSOR_MOTION);
-    if (awayMode && intrusionInputsAllowed) {
-      triggerSecurityAlarm(SENSOR_MOTION);
+  bool fireOutputsActive = isFireActive || pump1State || pump2State || pump3State;
+  bool securitySensorsEnabled = awayMode || pendingAwayMode;
+  bool intrusionInputsAllowed = securitySensorsEnabled && !fireOutputsActive && (long)(millis() - ignoreIntrusionUntil) >= 0;
+  bool motionReportsAllowed = securitySensorsEnabled && !fireOutputsActive && (long)(millis() - ignoreMotionReportUntil) >= 0;
+
+  if (motionReportsAllowed) {
+    if (hallwayMotionEdge) {
+      reportSensorEvent(SENSOR_MOTION_HALLWAY);
+      if (awayMode && intrusionInputsAllowed) {
+        triggerSecurityAlarm(SENSOR_MOTION_HALLWAY);
+      }
+    }
+
+    if (garageMotionEdge) {
+      reportSensorEvent(SENSOR_MOTION_GARAGE);
+      if (awayMode && intrusionInputsAllowed) {
+        triggerSecurityAlarm(SENSOR_MOTION_GARAGE);
+      }
     }
   }
 
-  if (awayMode && intrusionInputsAllowed && physicalDoorEdge) {
-    triggerSecurityAlarm(SENSOR_DOOR);
+  if (intrusionInputsAllowed) {
+    if (reed1 && !lastReed1Triggered) {
+      if (awayMode) {
+        triggerSecurityAlarm(SENSOR_WINDOW_1);
+      } else {
+        reportSensorEvent(SENSOR_WINDOW_1);
+      }
+    }
+
+    if (reed2 && !lastReed2Triggered) {
+      if (awayMode) {
+        triggerSecurityAlarm(SENSOR_WINDOW_2);
+      } else {
+        reportSensorEvent(SENSOR_WINDOW_2);
+      }
+    }
+
+    if (reed3 && !lastReed3Triggered) {
+      if (awayMode) {
+        triggerSecurityAlarm(SENSOR_WINDOW_3);
+      } else {
+        reportSensorEvent(SENSOR_WINDOW_3);
+      }
+    }
   }
 
   if (awayMode && intrusionInputsAllowed && physicalVibrationTriggered && !lastPhysicalVibrationTriggered) {
-    triggerSecurityAlarm(SENSOR_VIBRATION);
+    triggerSecurityAlarm(SENSOR_VIBRATION_GARAGE_DOOR);
   }
 
   lastHallwayPIRTriggered = hallwayPIR_Triggered;
@@ -1448,13 +1750,19 @@ void loop() {
     holdPumpWhileFire(room1Fire, pump2State, pump2Timer, room1FireLastSeen, room1Flame, "Room 1", now);
     holdPumpWhileFire(room2Fire, pump3State, pump3Timer, room2FireLastSeen, room2Flame, "Room 2", now);
 
+    if (kitchenFire && pump1State) reportSensorEvent(SENSOR_FLAME_KITCHEN);
+    if (room1Fire && pump2State) reportSensorEvent(SENSOR_FLAME_ROOM_1);
+    if (room2Fire && pump3State) reportSensorEvent(SENSOR_FLAME_ROOM_2);
+
     if (currentFireCondition && (pump1State || pump2State || pump3State)) {
-      reportSensorEvent(SENSOR_FLAME);
-      if (!isFireActive) {
+      if (!isFireActive && !fireConditionLatched) {
         isFireActive = true;
+        fireTimer = millis();
+        fireConditionLatched = true;
         reportEspState(awayMode ? "away" : "disarmed", !doorOpen);
       }
-      fireTimer = millis();
+    } else {
+      fireConditionLatched = false;
     }
   }
 
@@ -1462,21 +1770,35 @@ void loop() {
     lastSmokeCheckTime = millis();
     kitchenSmoke = analogRead(SMOKE_1_PIN); hallwaySmoke = analogRead(SMOKE_2_PIN); livingSmoke = analogRead(SMOKE_3_PIN);
     bool kitchenGas = confirmHighDanger(kitchenSmoke, SMOKE_THRESHOLD, GAS_CLEAR_MARGIN, GAS_CONFIRM_SAMPLES, kitchenGasCounter);
-    bool hallwayGas = confirmHighDanger(hallwaySmoke, SMOKE_THRESHOLD, GAS_CLEAR_MARGIN, GAS_CONFIRM_SAMPLES, hallwayGasCounter);
+    bool hallwayGas = confirmHighDanger(hallwaySmoke, HALLWAY_SMOKE_THRESHOLD, GAS_CLEAR_MARGIN, HALLWAY_GAS_CONFIRM_SAMPLES, hallwayGasCounter);
     bool livingGas = confirmHighDanger(livingSmoke, SMOKE_THRESHOLD, GAS_CLEAR_MARGIN, GAS_CONFIRM_SAMPLES, livingGasCounter);
 
     if (kitchenGas || hallwayGas || livingGas) {
-      reportSensorEvent(SENSOR_GAS);
-      if (!isFireActive) {
+      if (kitchenGas && !kitchenGasReported) reportSensorEvent(SENSOR_SMOKE_KITCHEN);
+      if (hallwayGas && !hallwayGasReported) reportSensorEvent(SENSOR_SMOKE_HALLWAY);
+      if (livingGas && !livingGasReported) reportSensorEvent(SENSOR_SMOKE_LIVING_ROOM);
+      kitchenGasReported = kitchenGasReported || kitchenGas;
+      hallwayGasReported = hallwayGasReported || hallwayGas;
+      livingGasReported = livingGasReported || livingGas;
+      if (!kitchenGas) kitchenGasReported = false;
+      if (!hallwayGas) hallwayGasReported = false;
+      if (!livingGas) livingGasReported = false;
+      if (!isFireActive && !gasConditionLatched) {
         isFireActive = true;
+        fireTimer = millis();
+        gasConditionLatched = true;
         reportEspState(awayMode ? "away" : "disarmed", !doorOpen);
         Serial.printf("\n[GAS]: Alarm. Kitchen=%d Hallway=%d Living=%d Threshold=%d\n", kitchenSmoke, hallwaySmoke, livingSmoke, SMOKE_THRESHOLD);
       }
-      fireTimer = millis();
+    } else {
+      gasConditionLatched = false;
+      kitchenGasReported = false;
+      hallwayGasReported = false;
+      livingGasReported = false;
     }
   }
 
-  if (pendingAwayMode && (millis() - awayModeActivationTimer >= AWAY_ARM_DELAY_MS)) { pendingAwayMode = false; awayMode = true; resetSecurityEdges(); reportSystemMode("away"); reportEspState("away", !doorOpen); playSecurityActivatedSound(); }
+  if (pendingAwayMode && (millis() - awayModeActivationTimer >= AWAY_ARM_DELAY_MS)) { pendingAwayMode = false; awayMode = true; suppressSecurityInputs(SENSOR_CHANGE_SETTLE_MS); reportSystemMode("away"); reportEspState("away", !doorOpen); playSecurityActivatedSound(); }
   if (isIntrusionActive && (millis() - intrusionTimer >= ALARM_BURST_DURATION_MS)) { isIntrusionActive = false; reportEspState(awayMode ? "away" : "disarmed", !doorOpen); }
   if (isFireActive && (millis() - fireTimer >= ALARM_BURST_DURATION_MS)) { isFireActive = false; reportEspState(awayMode ? "away" : "disarmed", !doorOpen); } 
 
@@ -1578,7 +1900,6 @@ void loop() {
       webDashboardHTML += "<button class='btn-start' onclick='sendCmd(\"START\")'>ðŸŸ¢ START SYSTEM</button><button class='btn-stop' onclick='sendCmd(\"STOP\")'>ðŸ›‘ STOP SYSTEM</button>";
       webDashboardHTML += "<button class='btn-on' onclick='sendCmd(\"ON\")'>ðŸ”’ SECURITY ARMED</button><button class='btn-off' onclick='sendCmd(\"OFF\")'>ðŸ”“ SECURITY DISARMED</button>";
       webDashboardHTML += "<button class='btn-open' onclick='sendCmd(\"OPEN\")'>ðŸ”“ ACTUATE DOOR OPEN</button><button class='btn-close' onclick='sendCmd(\"CLOSE\")'>ðŸ”’ ACTUATE DOOR CLOSED</button>";
-      webDashboardHTML += "<button class='btn-reset' onclick='if(confirm(\"Are you sure you want to disconnect current Wi-Fi and trigger registration mode?\")) sendCmd(\"RESETWIFI\")'>âš ï¸ RESET WIFI</button>";
       webDashboardHTML += "</div></div></body></html>";
     }
   }

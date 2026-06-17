@@ -7,6 +7,7 @@ export interface EventItem {
     message: string;
     severity: EventSeverity;
     actionTaken?: string;
+    sensorId?: string;
     sensorName?: string;
     location?: string;
     createdAt: string;

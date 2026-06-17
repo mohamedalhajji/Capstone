@@ -43,13 +43,13 @@ export const systemService = {
     },
 
     async fullReset(): Promise<SystemState> {
-        await api.post('/full-reset');
-        return setSystemMode('away');
+        const { data } = await api.post<BackendSystemState>('/full-reset');
+        return mapSystemState(data);
     },
 
     async resetSensors(): Promise<SystemState> {
-        await api.post('/reset-system');
-        return setSystemMode('away');
+        const { data } = await api.post<BackendSystemState>('/reset-system');
+        return mapSystemState(data);
     },
 
     async requestEspWifiReset(): Promise<void> {

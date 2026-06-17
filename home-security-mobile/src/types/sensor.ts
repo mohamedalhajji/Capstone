@@ -12,6 +12,7 @@ export type SensorStatus = 'idle' | 'triggered' | 'safe' | 'warning' | 'critical
 
 export interface SensorItem {
     id: string;
+    sensorName?: string;
     type: SensorType;
     label: string;
     location: string;

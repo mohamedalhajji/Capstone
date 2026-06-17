@@ -12,6 +12,7 @@ import { useSensors } from '../hooks/useSensors';
 import { useSystemState } from '../hooks/useSystemState';
 import { useAppLock } from '../hooks/useAppLock';
 import { useSensorAliases } from '../hooks/useSensorAliases';
+import { getApiErrorMessage } from '../api/client';
 import { Card, CommandButton, SectionHeader, SegmentedControl, StatusBadge } from '../ui/components';
 import { FadeInView } from '../ui/FadeInView';
 import { colors, spacing } from '../ui/theme';
@@ -253,7 +254,7 @@ export default function SettingsScreen() {
                                 Alert.alert('Setup mode started', 'Connect your phone to Home Security System, then return here and tap Change Wi-Fi.');
                             })
                             .catch((error) => {
-                                Alert.alert('System Wi-Fi reset failed', error instanceof Error ? error.message : 'Unknown error');
+                                Alert.alert('System Wi-Fi reset failed', getApiErrorMessage(error, 'Unknown error'));
                             });
                     },
                 },
@@ -332,9 +333,11 @@ export default function SettingsScreen() {
 
                         <Card>
                             <SectionHeader icon="wifi-cog" title="System Wi-Fi" />
-                            <StatusBadge label={systemWifiConnected ? 'CONNECTED' : 'SETUP'} color={systemWifiConnected ? colors.success : colors.warning} />
+                            <StatusBadge label={systemWifiConnected ? 'CONNECTED' : 'DISCONNECTED'} color={systemWifiConnected ? colors.success : colors.danger} />
                             <Text style={{ color: colors.muted, lineHeight: 19 }}>
-                                Use this when moving the system to a new router or Wi-Fi network.
+                                {systemWifiConnected
+                                    ? 'The ESP32 is online and checking in with the backend.'
+                                    : 'The ESP32 has not checked in recently. Reconnect system Wi-Fi before changing arm/disarm state.'}
                             </Text>
                             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
                                 <CommandButton
@@ -712,6 +715,14 @@ function HomeMapTab({
     onOpenEditor: () => void;
     onRename: (sensorId: string, name: string) => void;
 }) {
+    const roomBySensorId = React.useMemo(() => {
+        const lookup = new Map<string, string>();
+        houseMap.rooms.forEach((room) => {
+            room.deviceIds.forEach((deviceId) => lookup.set(deviceId, room.label));
+        });
+        return lookup;
+    }, [houseMap.rooms]);
+
     return (
         <Card>
             <SectionHeader
@@ -742,7 +753,9 @@ function HomeMapTab({
                         <MaterialCommunityIcons name="radar" size={20} color={colors.primary} />
                         <View style={{ flex: 1 }}>
                             <Text style={{ color: colors.text, fontWeight: '900' }}>{aliases[sensor.id] || sensor.label}</Text>
-                            <Text style={{ color: colors.muted, fontSize: 12 }}>{sensor.location}</Text>
+                            {!!roomBySensorId.get(sensor.id) && (
+                                <Text style={{ color: colors.muted, fontSize: 12 }}>{roomBySensorId.get(sensor.id)}</Text>
+                            )}
                         </View>
                         <MaterialCommunityIcons name="pencil-outline" size={18} color={colors.muted} />
                     </Pressable>
